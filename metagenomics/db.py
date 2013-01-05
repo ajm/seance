@@ -1,15 +1,29 @@
 import sys
 import bisect
 
-# TODO actually write an efficient version of this
-#      at the moment I just want the interface to 
-#      be clean and don't care about speed
+from metagenomics.datatypes import Sequence, SequenceCluster
+
 class SequenceDB(object) :
+    def __init__(self) :
+        self._db = SequenceTree()
+
+    def put(self, seq) :
+        return self._db.put(seq)
+
+    def get(self, key) :
+        return self._db.get(key)
+
+    def __len__(self) :
+        return len(self._db)
+
+    def __str__(self) :
+        return str(self._db)
+
+class SequenceList(object) :
     def __init__(self) :
         self._db = []
         self._count = 0
 
-    # put a sequence and return a key
     def put(self, seq) :
         self._count += 1
         try :
@@ -21,7 +35,6 @@ class SequenceDB(object) :
             self._db.append(seq)
             return len(self._db) - 1
 
-    # return the sequence object associated with the sequence key
     def get(self, key) :
         return self._db[key]
 
@@ -32,25 +45,81 @@ class SequenceDB(object) :
         return len(self._db)
 
     def __str__(self) :
-        return "%d (total added = %d, singulars = %d)" % (len(self._db), self._count, self.singulars())
+        return "%s: added = %d, unique = %d, singulars = %d" % (type(self).__name__, self._count, len(self._db), self.singulars())
 
-# this is junk
-# i thought a sorted list would do, but then the insert
-# time is O(n)
-class SortedList(object) :
+class SequenceTree(object) :
+    _count = 0
+    _db = {}
+
     def __init__(self) :
-        self._data = []
+        self.left = None
+        self.right = None
+        self.data = None
 
-    def insert(self, obj) :
-        loc = bisect.bisect_left(self._data, obj) 
+        self.count = 0
+        self.token = SequenceTree._count
+        SequenceTree._db[self.token] = self
+        SequenceTree._count += 1
 
-        if (len(self._data) == loc) or (self._data[loc] != obj) :
-            self._data.insert(loc, obj)
+    def put(self, seq) :
+        return self.add_cluster(SequenceCluster(seq))
+
+    def get(self, key) :
+        return SequenceTree._db[key].data
+
+    def add_cluster(self, clust) :
+        self.count += 1
+
+        if self.data is None :
+            self.data = clust
+            return self.token
+
+        elif self.data == clust :
+            self.data.merge(clust)
+            return self.token
+
+        elif self.data < clust :
+            if self.left is None :
+                self.left = SequenceTree()
+            
+            return self.left.add_cluster(clust)
+
         else :
-            self._data[loc].merge(obj)
+            if self.right is None :
+                self.right = SequenceTree()
+            
+            return self.right.add_cluster(clust)
 
-        return self._data[loc].sequence_number(), self._data[loc]
+    def singulars(self) :
+        tmp = 0
+        if self.data and self.data.is_singular() :
+            tmp += 1
+            
+        if self.left :
+            tmp += self.left.singulars()
+            
+        if self.right :
+            tmp += self.right.singulars()
 
-    def __contains__(self, obj) :
-        return self._data[bisect.bisect_left(self._data, obj)] == obj
+        return tmp
+
+    def max_cluster(self) :
+        tmp = [0]
+
+        if self.left :
+            tmp.append(self.left.max_cluster())
+
+        if self.right :
+            tmp.append(self.right.max_cluster())
+
+        if self.data :
+            tmp.append(len(self.data))
+
+        return max(tmp)
+
+    def __len__(self) :
+        return SequenceTree._count
+
+    def __str__(self) :
+        return "%s: added = %d, unique = %d, singulars = %d, max. cluster = %d" % (type(self).__name__, self.count, SequenceTree._count, self.singulars(), self.max_cluster())
 
