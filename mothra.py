@@ -120,7 +120,7 @@ def main() :
         sys.exit(-1)
 
     wf = WorkFlow(options['datadir'], options['tempdir'], options['metadata'])
-    wf.run()
+    wf.run(options['minlength'], options['minquality'], options['winquality'])
 
 if __name__ == '__main__' :
     main()

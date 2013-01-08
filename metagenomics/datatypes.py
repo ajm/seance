@@ -1,5 +1,6 @@
 import math
 import bisect
+import operator
 
 from functools import total_ordering
 
@@ -136,6 +137,33 @@ can use PAGAN to align them together and infer the representative sequence.
 
         return tmp
 
+    def __get_summary(self, func) :
+        return sum(map(lambda x : func(x.lengths), self._sequences))
+
+    def get_total_length(self) :
+        return self.__get_summary(sum)
+
+    def get_total_frequency(self) :
+        return self.__get_summary(len)
+
+    def get_length_freq(self) :
+        return self.get_total_length(), self.get_total_frequency()
+
+    def get_lengths(self) :
+        return reduce(operator.add, map(lambda x : x.lengths, self._sequences))
+
+    def get_most_frequent(self) :
+        freq = map(lambda x : len(x.lengths), self._sequences)
+        maxf = max(freq)
+
+        if freq.count(maxf) != 1 :
+            raise Exception("ambiguous canonical sequence")
+
+        return self._sequences[freq.index(maxf)], maxf / float(self.get_total_frequency())
+
+    def get_canonical(self) :
+        return get_most_frequent(self)
+
     def __lt__(self, other) :
         return repr(self) < repr(other)
 
@@ -144,7 +172,7 @@ can use PAGAN to align them together and infer the representative sequence.
                self._compressed_rep.startswith(other._compressed_rep)
 
     def __len__(self) :
-        return len(self._sequences)
+        return self.get_total_frequency()
 
     def __repr__(self) :
         return repr(self._compressed_rep)

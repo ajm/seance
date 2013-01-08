@@ -26,7 +26,7 @@ class WorkFlow(object) :
 
         return map(lambda x : NematodeSample(x, self.temp_directory, self.seqdb, mdr.get(x)), self.__get_datafiles())
 
-    def preprocess(self, length=100, qualitythresh=15, qualitywin=10) :
+    def preprocess(self, length, qualitythresh, qualitywin) :
         mf = MultiFilter()
         mf.add(LengthFilter(length))
         mf.add(QualityFilter(qualitythresh, qualitywin))
@@ -34,8 +34,10 @@ class WorkFlow(object) :
         for s in self.samples :
             s.preprocess(mf)
 
-    def run(self) :
-        self.preprocess()
+    def run(self, length, qualitythresh, qualitywin) :
+        self.preprocess(length, qualitythresh, qualitywin)
 
         print "\n" + str(self.seqdb)
+
+        print "Median =", self.seqdb.median()
 

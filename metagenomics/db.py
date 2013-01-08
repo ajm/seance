@@ -1,5 +1,5 @@
 import sys
-import bisect
+import operator
 
 from metagenomics.datatypes import Sequence, SequenceCluster
 
@@ -12,6 +12,9 @@ class SequenceDB(object) :
 
     def get(self, key) :
         return self._db.get(key)
+
+    def median(self) :
+        return self._db.median()
 
     def __len__(self) :
         return len(self._db)
@@ -45,7 +48,8 @@ class SequenceList(object) :
         return len(self._db)
 
     def __str__(self) :
-        return "%s: added = %d, unique = %d, singulars = %d" % (type(self).__name__, self._count, len(self._db), self.singulars())
+        return "%s: added = %d, unique = %d, singulars = %d" % \
+                (type(self).__name__, self._count, len(self._db), self.singulars())
 
 class SequenceTree(object) :
     _count = 0
@@ -66,6 +70,11 @@ class SequenceTree(object) :
 
     def get(self, key) :
         return SequenceTree._db[key].data
+
+    def median(self) :
+        tmp = reduce(operator.add, map(lambda x : x.data.get_lengths(), SequenceTree._db.values()))
+        tmp.sort()
+        return tmp[len(tmp)/2]
 
     def add_cluster(self, clust) :
         self.count += 1
@@ -121,5 +130,6 @@ class SequenceTree(object) :
         return SequenceTree._count
 
     def __str__(self) :
-        return "%s: added = %d, unique = %d, singulars = %d, max. cluster = %d" % (type(self).__name__, self.count, SequenceTree._count, self.singulars(), self.max_cluster())
+        return "%s: added = %d, unique = %d, singulars = %d, max. cluster = %d" % \
+                (type(self).__name__, self.count, SequenceTree._count, self.singulars(), self.max_cluster())
 

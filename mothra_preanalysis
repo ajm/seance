@@ -1,0 +1,4 @@
+
+# this will grab the lengths of all the sequences and sort them
+grep -A1 "^@" *fastq | grep -v "^[@-]" | awk '{ print length() }' | sort -g
+
