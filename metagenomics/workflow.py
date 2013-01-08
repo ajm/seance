@@ -37,3 +37,5 @@ class WorkFlow(object) :
     def run(self) :
         self.preprocess()
 
+        print "\n" + str(self.seqdb)
+

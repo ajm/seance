@@ -25,20 +25,21 @@ class Sample(object) :
 
         self._fastq.close()
 
-        tmp = self._seqcounts.most_common()[0][1] if len(self._seqcounts) != 0 else 0
-        print "%s:\tsample = %d\tdb = %s\t(most freq. = %d)" % \
-              (self._sff.get_basename(), len(self), str(self._db), tmp)
+        print str(self)
 
-    def merge(self, fromkey, tokey) :
+    def __merge(self, fromkey, tokey) :
         self._seqcounts[tokey] += self._seqcounts[fromkey]
         del self._seqcounts[fromkey]
+
+    def __most_numerous_freq(self) :
+        return self._seqcounts.most_common()[0][1] if len(self._seqcounts) != 0 else 0
 
     def __len__(self) :
         return sum(self._seqcounts.values())
 
     def __str__(self) :
-        return "%s %s: len = %d" % \
-               (self.__class__.__name__, self._sff.get_basename(), self.__len__())
+        return "%s: %s (#seq=%d unique=%d mostfreq = %d)" % \
+               (type(self).__name__, self._sff.get_basename(), len(self), len(self._seqcounts), self.__most_numerous_freq())
 
 class NematodeSample(Sample) :
     def __init__(self, sff_fname, workingdir, seqdb, metadata) :
