@@ -26,11 +26,14 @@ class WorkFlow(object) :
 
         return map(lambda x : NematodeSample(x, self.temp_directory, self.seqdb, mdr.get(x)), self.__get_datafiles())
 
-    def preprocess_samples(self, length=100, qualitythresh=15, qualitywin=10) :
+    def preprocess(self, length=100, qualitythresh=15, qualitywin=10) :
         mf = MultiFilter()
         mf.add(LengthFilter(length))
         mf.add(QualityFilter(qualitythresh, qualitywin))
 
         for s in self.samples :
-            s.process(mf)
+            s.preprocess(mf)
+
+    def run(self) :
+        self.preprocess()
 

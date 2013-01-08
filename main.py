@@ -165,7 +165,7 @@ def main() :
         sys.exit(-1)
 
     wf = WorkFlow(options['datadir'], options['tempdir'], options['metadata'])
-    wf.preprocess_samples()
+    wf.run()
 
 if __name__ == '__main__' :
     main()

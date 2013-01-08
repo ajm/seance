@@ -14,12 +14,16 @@ class Sample(object) :
         self._db = seqdb
         self._seqcounts = collections.Counter()
 
-    def process(self, filt) :
+    def preprocess(self, filt) :
         self._fastq = Sff2Fastq().run(self._sff, self._workingdir)
 
-        for seq in self._fastq.get_generator() :
+        self._fastq.open()
+
+        for seq in self._fastq :
             if filt.accept(seq) :
                 self._seqcounts[self._db.put(seq)] += 1
+
+        self._fastq.close()
 
         tmp = self._seqcounts.most_common()[0][1] if len(self._seqcounts) != 0 else 0
         print "%s:\tsample = %d\tdb = %s\t(most freq. = %d)" % \

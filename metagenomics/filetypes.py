@@ -30,22 +30,6 @@ class SffFile(DataFile) :
     def __init__(self, fname) :
         DataFile.__init__(self, fname, ".sff")
 
-class FastqFile(DataFile) :
-    def __init__(self, fname) :
-        DataFile.__init__(self, fname, ".fastq")
-
-    def trim_tags(self) :
-        raise NotImplemented
-
-    def get_sequences(self) :
-        return [i for i in FastqReader(self.get_filename()).read()]
-
-    def get_generator(self) :
-        return FastqReader(self.get_filename()).read()
-
-    def __iter__(self) :
-        return iter(FastqReader(self.get_filename()))
-
 class State(object) :
     def __init__(self, states) :
         self.__counter = 0
@@ -58,33 +42,40 @@ class State(object) :
     def get(self) :
         return self.__counter
 
-class FastqReader(object) :
+class FastqFile(DataFile) :
     def __init__(self, fname) :
-        self.__filename = fname
-        self.__sequences = {}
-        self.__linenum = 0
+        super(FastqFile, self).__init__(fname, ".fastq")
+        self._filehandle = None
+        self._sequences = {}
 
-        self.__validators = {
+        self._validators = {
                     0 : self.__validate_seqid,
                     1 : self.__validate_sequence,
                     2 : self.__validate_qualid,
                     3 : self.__validate_qualities
                 }
 
+        self._state = State(4)
+        self._linenum = 0
+        self._current = {  0 : None,
+                           1 : None,
+                           2 : None,
+                           3 : None }
+
     def __validate_seqid(self, s) :
         if not s.startswith('@') :
-            raise ParseError("expected line %d to start with an @" % self.__linenum)
+            raise ParseError("expected line %d to start with an @" % self._linenum)
 
     def __validate_sequence(self, s) :
         uniq = set(s)
 
         for i in uniq :
             if i not in IUPAC.codes :
-                raise ParseError("line %d contained an invalid UIPAC code (%s)" % (self.__linenum, i))
+                raise ParseError("line %d contained an invalid UIPAC code (%s)" % (self._linenum, i))
 
     def __validate_qualid(self, s) :
         if not s.startswith('+') :
-            raise ParseError("expected line %d to start with an +" % self.__linenum)
+            raise ParseError("expected line %d to start with an +" % self._linenum)
 
     def __validate_qualities(self, s) :
         uniq = set(s)
@@ -94,44 +85,57 @@ class FastqReader(object) :
                 Sequence.convert_quality(i)
         
             except ValueError, ve :
-                raise ParseError("line %d contained an invalid quality value (%s)" % (self.__linenum, i))
+                raise ParseError("line %d contained an invalid quality value (%s)" % (self._linenum, i))
 
     def __validate(self, s, state) :
-        self.__validators[state](s)
+        self._validators[state](s)
 
     def __iter__(self) :
         return self
 
+    def next(self) :
+        return self.read()
+
+    def open(self) :
+        self._filehandle = open(self.get_filename())
+
+    def close(self) :
+        self._filehandle.close()
+
     def read(self) :
-        try :
-            f = open(self.__filename)
+        #try :
+        #    f = open(self.__filename)
 
-        except IOError, ioe :
-            raise ParseError(str(ioe))
+        #except IOError, ioe :
+        #    raise ParseError(str(ioe))
 
-        self.__linenum = 1
-        st = State(4)
+        #self.__linenum = 1
+        #st = State(4)
         
-        current = { 0 : None,
-                    1 : None,
-                    2 : None,
-                    3 : None }
+        #current = { 0 : None,
+        #            1 : None,
+        #            2 : None,
+        #            3 : None }
         
-        for line in f :
+        #for line in f :
+        for line in self._filehandle :
             line = line.strip()
             
-            self.__validate(line, st.get())
-            current[st.get()] = line
+            self.__validate(line, self._state.get())
+            self._current[self._state.get()] = line
 
-            if st.get() == 3 :
+            self._state.inc()
+            self._linenum += 1
+
+            #if self._state.get() == 3 :
+            if self._state.get() == 0 :
                 #self.__sequences[current[0][1:]] = Sequence(current[1], current[3])
-                yield Sequence(current[1], current[3])
+                return Sequence(self._current[1], self._current[3])
 
-            st.inc()
-            
-            self.__linenum += 1
+            #self._state.inc()
+            #self._linenum += 1
 
-        f.close()
+        #f.close()
 
         raise StopIteration
 

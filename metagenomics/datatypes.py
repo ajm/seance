@@ -136,14 +136,12 @@ can use PAGAN to align them together and infer the representative sequence.
 
         return tmp
 
-    def __duplicate(self, comp) :
-        return comp.startswith(self._compressed_rep) or self._compressed_rep.startswith(comp)
-
     def __lt__(self, other) :
         return repr(self) < repr(other)
 
     def __eq__(self, other) :
-        return self.__duplicate(other._compressed_rep)
+        return other._compressed_rep.startswith(self._compressed_rep) or \
+               self._compressed_rep.startswith(other._compressed_rep)
 
     def __len__(self) :
         return len(self._sequences)
