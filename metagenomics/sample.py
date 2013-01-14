@@ -17,15 +17,14 @@ class Sample(object) :
     def preprocess(self, filt) :
         self._fastq = Sff2Fastq().run(self._sff, self._workingdir)
 
-        self._fastq.open()
-
         for seq in self._fastq :
             if filt.accept(seq) :
                 self._seqcounts[self._db.put(seq)] += 1
+                #print str(seq)
 
         self._fastq.close()
 
-        print str(self)
+        #print str(self)
 
     def __merge(self, fromkey, tokey) :
         self._seqcounts[tokey] += self._seqcounts[fromkey]

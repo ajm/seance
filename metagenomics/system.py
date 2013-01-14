@@ -1,12 +1,32 @@
 import sys
 import os
+import tempfile
 import multiprocessing
 
 from metagenomics.tools import ExternalProgram
 
 class System(object) :
+    __tmpdir__ = None
+
     def __init__(self) :
         pass
+
+    @staticmethod
+    def tempdir(tmpdir=None) :
+        if tmpdir != None :
+            System.__tmpdir__ = tmpdir
+            return
+
+        if System.__tmpdir__ != None :
+            return System.__tmpdir__
+        elif os.environ.has_key('TMPDIR') :
+            return os.environ['TMPDIR']
+        else :
+            return '/tmp'
+
+    @staticmethod
+    def tempfilename(ext="") :
+        return tempfile.mktemp(dir=System.tempdir()) + ext
 
     def check_local_installation(self, required_programs) :
         bad = False

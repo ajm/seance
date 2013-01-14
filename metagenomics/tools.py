@@ -1,3 +1,4 @@
+import sys
 import abc
 import os
 
@@ -27,10 +28,6 @@ class ExternalProgram(object) :
         
         return False
     
-    @abc.abstractmethod
-    def run(self, *args) :
-        pass
-
     def system(self, command) :
         retcode = os.system(command) 
         if retcode != 0 :
@@ -38,7 +35,7 @@ class ExternalProgram(object) :
 
 class Sff2Fastq(ExternalProgram) :
     def __init__(self) :
-        ExternalProgram.__init__(self, 'sff2fastq')
+        super(Sff2Fastq, self).__init__('sff2fastq')
         self.command = "sff2fastq -o %s %s 2> /dev/null"
 
     def run(self, sff, outdir) :
@@ -57,19 +54,20 @@ class Sff2Fastq(ExternalProgram) :
         
         return FastqFile(fastq_fname)
 
-class TagCleaner(ExternalProgram) :
-    def __init__(self) :
-        ExternalProgram.__init__(self, 'tagCleaner')
-        self.command = ""
-
-    def run(self, *args) :
-        raise NotImplemented
-
-
 class Pagan(ExternalProgram) :
     def __init__(self) :
         super(Pagan, self).__init__('pagan')
+        self.command = "pagan --use-consensus --consensus-minimum=3 --use-duplicate-weigths --454 --queryfile %s --outfile %s &> /dev/null"
 
-    def run(self, *args) :
-        raise NotImplemented
+    def get_454_alignment(self, fasta_fname) :
+        out_fname = fasta_fname + ".out"
 
+        try :
+            self.system(self.command % (fasta_fname, out_fname))
+
+        except ExternalProgramError, epe :
+            print >> sys.stderr, "Error: " + str(epe)
+            sys.exit(-1)
+        
+        # pagan always adds '.fas'
+        return FastqFile(out_fname + ".fas")

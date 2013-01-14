@@ -1,6 +1,9 @@
 import sys
 import abc
 
+class FilterError(Exception) :
+    pass
+
 class Filter(object) :
     __metaclass__ = abc.ABCMeta
     
@@ -9,7 +12,11 @@ class Filter(object) :
 
     @abc.abstractmethod
     def accept(self, seq) :
-        return
+        pass
+
+class NullFilter(object) :
+    def accept(self) :
+        return True
 
 class MultiFilter(Filter) :
     def __init__(self) :
@@ -24,14 +31,48 @@ class MultiFilter(Filter) :
                 return False
         return True
 
+    def __len__(self) :
+        return len(self.filters)
+
 class LengthFilter(Filter) :
     def __init__(self, length) :
+        if length < 0 :
+            raise FilterError, "%s: length is negative (%d)" % (type(self).__name__, length)
+
         self.length = length
 
     def accept(self, seq) :
         return len(seq) > self.length
 
-class QualityFilter(Filter) :
+class TrimLeftFilter(Filter) :
+    def __init__(self, trim) :
+        self.trim = trim
+
+    def accept(self, seq) :
+        seq.ltrim = self.trim
+        return True
+
+class TrimRightFilter(Filter) :
+    def __init__(self, maxlen) :
+        self.maxlen = maxlen
+
+    def accept(self, seq) :
+        seq.truncate(self.maxlen)
+        return True
+
+class AmbiguousFilter(Filter) :
+    def accept(self, seq) :
+        return 'N' not in seq
+
+class AverageQualityFilter(Filter) :
+    def __init__(self, qual) :
+        self._qual = qual
+
+    def accept(self, seq) :
+        tmp = seq.qualities()
+        return (sum(tmp) / float(len(tmp))) >= self._qual
+
+class WindowedQualityFilter(Filter) :
     def __init__(self, qual, winlen) :
         self.__qual = qual
         self.__winlen = winlen
@@ -52,20 +93,4 @@ class QualityFilter(Filter) :
                 return False
             
         return True
-
-class DuplicateFilter(Filter) :
-    def __init__(self) :
-        self.__prev = None
-
-    def accept(self, seq) :
-        if self.__prev == None :
-            self.__prev = seq
-            return True
-
-        if self.__prev.is_duplicate(seq) :
-            self.__prev.merge(seq)
-            return False
-        else :
-            self.__prev = seq
-            return True
 

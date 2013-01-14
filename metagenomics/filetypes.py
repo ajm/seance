@@ -1,6 +1,6 @@
 import sys
 import os
-from metagenomics.datatypes import Sequence, SampleMetaData, IUPAC
+from metagenomics.datatypes import Sequence, SampleMetadata, IUPAC
 
 class DataFileError(Exception):
     pass
@@ -42,40 +42,55 @@ class State(object) :
     def get(self) :
         return self.__counter
 
+    def __len__(self) :
+        return self.__num_states
+
+class ParseError(Exception) :
+    pass
+
 class FastqFile(DataFile) :
+    SEQID = 0
+    SEQ = 1
+    QUALID = 2
+    QUAL = 3
+
     def __init__(self, fname) :
         super(FastqFile, self).__init__(fname, ".fastq")
-        self._filehandle = None
-        self._sequences = {}
+        self._filehandle = open(self.get_filename())
+        self._state = FastqFile.SEQID
+        self._linenum = 0
 
         self._validators = {
-                    0 : self.__validate_seqid,
-                    1 : self.__validate_sequence,
-                    2 : self.__validate_qualid,
-                    3 : self.__validate_qualities
-                }
+                FastqFile.SEQID  : self.__validate_seqid,
+                FastqFile.SEQ    : self.__validate_sequence,
+                FastqFile.QUALID : self.__validate_qualid,
+                FastqFile.QUAL   : self.__validate_qualities
+            }
 
-        self._state = State(4)
-        self._linenum = 0
-        self._current = {  0 : None,
-                           1 : None,
-                           2 : None,
-                           3 : None }
+        self._current = {  
+                FastqFile.SEQID  : None,
+                FastqFile.SEQ    : None,
+                FastqFile.QUALID : None,
+                FastqFile.QUAL   : None 
+            }
 
     def __validate_seqid(self, s) :
-        if not s.startswith('@') :
-            raise ParseError("expected line %d to start with an @" % self._linenum)
+        if not (s.startswith('@') or s.startswith('>')) :
+            raise ParseError("%s : expected line %d to start with a @ or > (started with %s)" % \
+                    (self.get_filename(), self._linenum, s[0]))
 
     def __validate_sequence(self, s) :
         uniq = set(s)
 
         for i in uniq :
             if i not in IUPAC.codes :
-                raise ParseError("line %d contained an invalid UIPAC code (%s)" % (self._linenum, i))
+                raise ParseError("%s : line %d contained an invalid UIPAC code (%s)" % \
+                        (self.get_filename(), self._linenum, i))
 
     def __validate_qualid(self, s) :
         if not s.startswith('+') :
-            raise ParseError("expected line %d to start with an +" % self._linenum)
+            raise ParseError("%s : expected line %d to start with a +" % \
+                    (self.get_filename(), self._linenum))
 
     def __validate_qualities(self, s) :
         uniq = set(s)
@@ -85,7 +100,8 @@ class FastqFile(DataFile) :
                 Sequence.convert_quality(i)
         
             except ValueError, ve :
-                raise ParseError("line %d contained an invalid quality value (%s)" % (self._linenum, i))
+                raise ParseError("%s : line %d contained an invalid quality value (%s)" % \
+                        (self.get_filename(), self._linenum, i))
 
     def __validate(self, s, state) :
         self._validators[state](s)
@@ -96,50 +112,122 @@ class FastqFile(DataFile) :
     def next(self) :
         return self.read()
 
-    def open(self) :
-        self._filehandle = open(self.get_filename())
-
     def close(self) :
         self._filehandle.close()
 
+    def seq(self) :
+        duplicates = 1
+        if "NumDuplicates" in self._current[FastqFile.SEQID] :
+            data = self._current[FastqFile.SEQID].split()
+            duplicates = int(data[1].split('=')[1])
+
+        tmp = Sequence(self._current[FastqFile.SEQ], 
+                None if self._current[FastqFile.QUAL] == "" else self._current[FastqFile.QUAL])
+        
+        tmp.duplicates = duplicates
+        return tmp
+
     def read(self) :
-        #try :
-        #    f = open(self.__filename)
-
-        #except IOError, ioe :
-        #    raise ParseError(str(ioe))
-
-        #self.__linenum = 1
-        #st = State(4)
-        
-        #current = { 0 : None,
-        #            1 : None,
-        #            2 : None,
-        #            3 : None }
-        
-        #for line in f :
         for line in self._filehandle :
             line = line.strip()
-            
-            self.__validate(line, self._state.get())
-            self._current[self._state.get()] = line
 
-            self._state.inc()
             self._linenum += 1
 
-            #if self._state.get() == 3 :
-            if self._state.get() == 0 :
-                #self.__sequences[current[0][1:]] = Sequence(current[1], current[3])
-                return Sequence(self._current[1], self._current[3])
+            # both '@' and '>' are legitimate quality scores
+            # but '+' is a genuine delimiter
+            if line.startswith('+') :
+                self._current[FastqFile.QUALID] = line
+                self._state = FastqFile.QUAL
+                continue
 
-            #self._state.inc()
-            #self._linenum += 1
+            if self._state == FastqFile.SEQID :
+                self.__validate(line, self._state)
 
-        #f.close()
+                self._current[FastqFile.SEQID] = line
+                self._current[FastqFile.SEQ] = ""
+                self._current[FastqFile.QUALID] = ""
+                self._current[FastqFile.QUAL] = ""
+
+                self._state = FastqFile.SEQ
+
+            elif self._state == FastqFile.SEQ :
+                # if we are reading a fasta file
+                if line.startswith('>') :
+                    tmp = self.seq()
+                    self._current[FastqFile.SEQID] = line
+                    self._current[FastqFile.SEQ] = ""
+                    return tmp
+
+                self._current[FastqFile.SEQ] += line
+
+            elif self._state == FastqFile.QUAL :
+                self.__validate(line, self._state)
+
+                self._current[FastqFile.QUAL] += line
+
+                if len(self._current[FastqFile.SEQ]) == len(self._current[FastqFile.QUAL]) :
+                    self._state = FastqFile.SEQID
+                    return self.seq()
 
         raise StopIteration
 
-class MetaDataReader(object) :
+    def readold(self) :
+        for line in self._filehandle :
+            line = line.strip()
+
+            self._linenum += 1
+
+            # annoyingly '>' is a valid quality score
+            if self._linenum == 1 :
+                self.__validate(line, FastqFile.SEQID)
+                self.SEQID_START = line[0]
+
+            if line.startswith(self.SEQID_START) :
+
+                seq = None
+
+                if self._current[FastqFile.SEQID] != None :
+                    print self.get_filename()
+                    print self._current[FastqFile.SEQ]
+                    print self._current[FastqFile.QUAL]
+                    seq = Sequence(self._current[FastqFile.SEQ], None if self.SEQID_START == '>' else self._current[FastqFile.QUAL])
+
+                self.__validate(line, FastqFile.SEQID)
+
+                self._current[FastqFile.SEQID] = line
+                self._current[FastqFile.SEQ] = ""
+                self._current[FastqFile.QUALID] = ""
+                self._current[FastqFile.QUAL] = ""
+                
+                self._state = FastqFile.SEQ
+
+                if seq != None :
+                    return seq
+
+                continue
+
+            if line.startswith('+') :
+                self.__validate(line, FastqFile.QUALID)
+                self._current[FastqFile.QUALID] = line
+                self._current[FastqFile.QUAL] = ""
+                self._state = FastqFile.QUAL
+                continue
+
+            if self._state == FastqFile.SEQ :
+                self.__validate(line, FastqFile.SEQ)
+                self._current[FastqFile.SEQ] += line
+                continue
+
+            if self._state == FastqFile.QUAL :
+                self.__validate(line, FastqFile.QUAL)
+                self._current[FastqFile.QUAL] += line
+                continue
+
+            raise ParseError("%s : state illegal" % type(self).__name__)
+
+        raise StopIteration
+
+class MetadataReader(object) :
     def __init__(self, metadata_fname) :
         self.metadata_fname = metadata_fname
         self.metadata = {}
@@ -181,7 +269,7 @@ class MetaDataReader(object) :
                          (line_num, self.metadata_file, data[6])
                 continue
             
-            smd = SampleMetaData()
+            smd = SampleMetadata()
             
             smd.put('file', filename)
             smd.put('lemur', lemurname)

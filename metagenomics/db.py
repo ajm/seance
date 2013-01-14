@@ -1,7 +1,14 @@
 import sys
 import operator
+import bisect
+import collections
 
-from metagenomics.datatypes import Sequence, SequenceCluster
+from functools import total_ordering
+
+from metagenomics.datatypes import Sequence, SequenceError, IUPAC
+from metagenomics.tools import Pagan
+from metagenomics.system import System
+from metagenomics.progress import Progress
 
 class SequenceDB(object) :
     def __init__(self) :
@@ -13,43 +20,17 @@ class SequenceDB(object) :
     def get(self, key) :
         return self._db.get(key)
 
-    def median(self) :
-        return self._db.median()
+    def debug(self) :
+        self._db.debug()
+
+    def finalise(self) :
+        self._db.finalise()
 
     def __len__(self) :
         return len(self._db)
 
     def __str__(self) :
         return str(self._db)
-
-class SequenceList(object) :
-    def __init__(self) :
-        self._db = []
-        self._count = 0
-
-    def put(self, seq) :
-        self._count += 1
-        try :
-            tmp = self._db.index(seq)
-            self._db[tmp].merge(seq)
-            return tmp
-
-        except ValueError, ve :
-            self._db.append(seq)
-            return len(self._db) - 1
-
-    def get(self, key) :
-        return self._db[key]
-
-    def singulars(self) :
-        return map(lambda x : len(x.lengths), self._db).count(1)
-
-    def __len__(self) :
-        return len(self._db)
-
-    def __str__(self) :
-        return "%s: added = %d, unique = %d, singulars = %d" % \
-                (type(self).__name__, self._count, len(self._db), self.singulars())
 
 class SequenceTree(object) :
     _count = 0
@@ -71,10 +52,21 @@ class SequenceTree(object) :
     def get(self, key) :
         return SequenceTree._db[key].data
 
-    def median(self) :
-        tmp = reduce(operator.add, map(lambda x : x.data.get_lengths(), SequenceTree._db.values()))
-        tmp.sort()
-        return tmp[len(tmp)/2]
+    def debug(self) :
+        for i in SequenceTree._db.values() :
+            f = open("cluster_%d.fasta" % i.token, 'w')
+            print >> f, str(i.data)
+            f.close()
+
+    def finalise(self) :
+        p = Progress("Pagan alignment", len(SequenceTree._db.values()))
+        p.start()
+
+        for sc in SequenceTree._db.values() :
+            sc.data.generate_canonical_sequence()
+            p.increment()
+
+        p.end()
 
     def add_cluster(self, clust) :
         self.count += 1
@@ -101,6 +93,7 @@ class SequenceTree(object) :
 
     def singulars(self) :
         tmp = 0
+
         if self.data and self.data.is_singular() :
             tmp += 1
             
@@ -132,4 +125,160 @@ class SequenceTree(object) :
     def __str__(self) :
         return "%s: added = %d, unique = %d, singulars = %d, max. cluster = %d" % \
                 (type(self).__name__, self.count, SequenceTree._count, self.singulars(), self.max_cluster())
+
+@total_ordering
+class SequenceCluster(object) :
+    """ 
+Each 'SequenceCluster' represents all strings that are duplicates of one another
+when all runs of the same character are flated to a single instance of that character
+
+e.g. AAABBBCCC -> ABC
+
+All strings that are perfect prefixes of one another (without compressed) are
+represented as single sequence objects. 
+
+The goal is that the most prevalent sequence will be the final representative for each 
+sequence cluster. If no clear representative sequence exists (by some margin) then we
+can use PAGAN to align them together and infer the representative sequence.
+
+    """
+    def __init__(self, seq) :
+        self._compressed_rep = self.__compress(seq.sequence())
+        self._sequences = SortedList([seq])
+        self._canonical_sequence = None
+
+    def merge(self, other) :
+        for seq in other._sequences :
+            self._sequences.insert(seq)
+
+    def is_singular(self) :
+        return (len(self._sequences) == 1) and self._sequences[0].is_singular()
+
+    def __compress(self, seq) :
+        tmp = seq[0]
+
+        for i in seq[1:] :
+            if tmp[-1] != i :
+                tmp += i
+
+        return tmp
+
+    def __write_fasta(self) :
+        fname = System.tempfilename(".fasta")
+        f = open(fname, 'w')
+        print >> f, str(self)
+        f.close()
+
+        return fname
+
+    def generate_canonical_sequence(self) :
+
+        # there is only one sequence anyway, 
+        # so no alignment necessary
+        if len(self._sequences) == 1 :
+            self._canonical_sequence = self._sequences[0]
+            return
+
+        aligned = Pagan().get_454_alignment(self.__write_fasta())
+
+        chars = {}
+
+        for seq in aligned :
+            for i in range(len(seq)) :
+                if not chars.has_key(i) :
+                    chars[i] = collections.Counter()
+                
+                chars[i][seq[i]] += seq.duplicates
+
+        aligned.close()
+
+        tmp = ""
+        for i in range(max(chars.keys())) :
+            # tmp2 is list of tuples of the form (character, frequency)
+            tmp2 = chars[i].most_common()
+
+            max_freq = tmp2[0][1]
+            bases = []
+
+            for char,freq in tmp2 :
+                if freq == max_freq :
+                    bases.append(char)
+                    continue
+                else :
+                    break
+
+            try :
+                iupac = IUPAC.get(bases)
+
+            except SequenceError, se:
+                print bases, tmp2
+                print aligned.get_filename()
+                raise se
+
+            if iupac != '-' :
+                tmp += iupac
+
+        self._canonical_sequence = Sequence(tmp)
+
+        #print str(self._canonical_sequence)
+        #print aligned.get_filename()
+
+    def __lt__(self, other) :
+        return repr(self) < repr(other)
+
+    def __eq__(self, other) :
+        return other._compressed_rep.startswith(self._compressed_rep) or \
+               self._compressed_rep.startswith(other._compressed_rep)
+
+    # TODO : make this more natural
+    def __len__(self) :
+        return sum(map(lambda x : len(x.lengths), self._sequences))
+
+    def __repr__(self) :
+        return repr(self._compressed_rep)
+
+    def __str__(self) :
+        #return self._compressed_rep
+        tmp = ""
+
+        for i in range(len(self._sequences)) :
+            count = len(self._sequences[i].lengths)
+
+            tmp += (">seq%d NumDuplicates=%d\n" % (i, count))
+            tmp += self._sequences[i].sequence()
+            tmp += "\n"
+
+        if self._canonical_sequence != None :
+            tmp += ">canonical\n"
+            tmp += self._canonical_sequence.sequence()
+
+        return tmp
+
+class SortedList(object) :
+    def __init__(self, dat=[]) :
+        self._data = dat
+
+    def insert(self, obj) :
+        loc = bisect.bisect_left(self._data, obj) 
+
+        if (len(self._data) == loc) or (not self._data[loc].is_duplicate(obj)) :
+            self._data.insert(loc, obj)
+        else :
+            self._data[loc].merge(obj)
+
+    def __getitem__(self, ind) :
+        return self._data[ind]
+
+    def __contains__(self, obj) :
+        return self._data[bisect.bisect_left(self._data, obj)] == obj
+
+    def __iter__(self) :
+        return iter(self._data)
+
+    def __len__(self) :
+        return len(self._data)
+
+    def __str__(self) :
+        return str(self._data)
+
 
