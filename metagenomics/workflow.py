@@ -62,6 +62,6 @@ class WorkFlow(object) :
 
         p.end()
 
-        #print >> sys.stderr, "\n" + str(self.seqdb)
+        print >> sys.stderr, "\n" + str(self.seqdb)
         self.seqdb.finalise()
         

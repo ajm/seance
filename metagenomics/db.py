@@ -6,7 +6,7 @@ import collections
 from functools import total_ordering
 
 from metagenomics.datatypes import Sequence, SequenceError, IUPAC
-from metagenomics.tools import Pagan
+from metagenomics.tools import Pagan, Aligner1D
 from metagenomics.system import System
 from metagenomics.progress import Progress
 
@@ -59,11 +59,12 @@ class SequenceTree(object) :
             f.close()
 
     def finalise(self) :
-        p = Progress("Pagan alignment", len(SequenceTree._db.values()))
+        p = Progress("Alignment", len(SequenceTree._db.values()))
         p.start()
 
         for sc in SequenceTree._db.values() :
             sc.data.generate_canonical_sequence()
+            sc.data.write_fasta(".canon")
             p.increment()
 
         p.end()
@@ -134,7 +135,7 @@ when all runs of the same character are flated to a single instance of that char
 
 e.g. AAABBBCCC -> ABC
 
-All strings that are perfect prefixes of one another (without compressed) are
+All strings that are perfect prefixes of one another (without compression) are
 represented as single sequence objects. 
 
 The goal is that the most prevalent sequence will be the final representative for each 
@@ -163,8 +164,8 @@ can use PAGAN to align them together and infer the representative sequence.
 
         return tmp
 
-    def __write_fasta(self) :
-        fname = System.tempfilename(".fasta")
+    def write_fasta(self, ext=".fasta") :
+        fname = System.tempfilename(ext)
         f = open(fname, 'w')
         print >> f, str(self)
         f.close()
@@ -179,7 +180,8 @@ can use PAGAN to align them together and infer the representative sequence.
             self._canonical_sequence = self._sequences[0]
             return
 
-        aligned = Pagan().get_454_alignment(self.__write_fasta())
+        #aligned = Pagan().get_454_alignment(self.write_fasta())
+        aligned = Aligner1D().get_alignment(self.write_fasta())
 
         chars = {}
 
@@ -226,9 +228,17 @@ can use PAGAN to align them together and infer the representative sequence.
     def __lt__(self, other) :
         return repr(self) < repr(other)
 
+    def __is_prefix(self, seq1, seq2) :
+        return seq1.startswith(seq2) or seq2.startswith(seq1)
+
+    # comparing the compressed representative strings and ignoring the 
+    # first character is in case there was a homopolymer error in the 
+    # MID that is not the same as the first character in the true sequence
     def __eq__(self, other) :
-        return other._compressed_rep.startswith(self._compressed_rep) or \
-               self._compressed_rep.startswith(other._compressed_rep)
+        return self.__is_prefix(self._compressed_rep, other._compressed_rep) or \
+               self.__is_prefix(self._compressed_rep[1:], other._compressed_rep) or \
+               self.__is_prefix(self._compressed_rep, other._compressed_rep[1:])
+        #return self.__is_prefix(self._compressed_rep, other._compressed_rep)
 
     # TODO : make this more natural
     def __len__(self) :
@@ -249,7 +259,7 @@ can use PAGAN to align them together and infer the representative sequence.
             tmp += "\n"
 
         if self._canonical_sequence != None :
-            tmp += ">canonical\n"
+            tmp += (">canonical NumDuplicates=%d\n" % len(self))
             tmp += self._canonical_sequence.sequence()
 
         return tmp

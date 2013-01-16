@@ -71,3 +71,75 @@ class Pagan(ExternalProgram) :
         
         # pagan always adds '.fas'
         return FastqFile(out_fname + ".fas")
+
+class Aligner1D(object) :
+    def __init__(self) :
+        self.__reset()
+
+    def __reset(self) :
+        self.sequences = []
+        self.charfreqs = []
+        self.maxlens = {}
+
+    def __test_max(self, pos, freq) :
+        try :
+            if self.maxlens[pos] < freq :
+                self.maxlens[pos] = freq
+
+        except KeyError, ke :
+            self.maxlens[pos] = freq
+
+    def __convert(self, seq) :
+        tmp = []
+
+        char = seq[0]
+        freq = 1
+
+        for i in seq[1:] :
+            if i == char :
+                freq += 1
+            else :
+                self.__test_max(len(tmp), freq)
+                tmp.append((char, freq))
+
+                char = i
+                freq = 1
+
+        self.__test_max(len(tmp), freq)
+        tmp.append((char, freq))
+
+        return tmp
+
+    def get_alignment(self, fname) :
+        self.__reset()
+
+        fq = FastqFile(fname)
+
+        for seq in fq :
+            self.sequences.append(seq)
+            self.charfreqs.append(self.__convert(seq))
+
+        fq.close()
+
+        s = ""
+        for i in range(len(self.charfreqs)) :
+            s += ("%s\n" % self.sequences[i].id)
+            tmp = self.charfreqs[i]
+            for pos in range(len(self.maxlens)) :
+                try :
+                    char,freq = tmp[pos]
+                except IndexError, ie :
+                    char,freq = 'X', 0    
+
+                s += ((char * freq) + ('-' * (self.maxlens[pos] - freq)))
+            s += "\n"
+
+        # write out again to file to keep same API
+        # TODO: streamline, this is mostly for testing so I don't need to
+        # change anything else
+        outf = open(fname + ".out", 'w')
+        print >> outf, s
+        outf.close()
+
+        return FastqFile(outf.name)
+

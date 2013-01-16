@@ -18,7 +18,9 @@ class DataFile(object) :
         return os.path.isfile(self.get_filename())
 
     def get_filename(self) :
-        return self.pathname + os.sep + self.filename
+        if self.pathname != "" :
+            return self.pathname + os.sep + self.filename
+        return self.filename
 
     def get_basename(self) :
         return self.filename
@@ -124,7 +126,10 @@ class FastqFile(DataFile) :
         tmp = Sequence(self._current[FastqFile.SEQ], 
                 None if self._current[FastqFile.QUAL] == "" else self._current[FastqFile.QUAL])
         
+        # hack, maybe make more documented
+        tmp.id = self._current[FastqFile.SEQID]
         tmp.duplicates = duplicates
+
         return tmp
 
     def read(self) :
@@ -132,6 +137,9 @@ class FastqFile(DataFile) :
             line = line.strip()
 
             self._linenum += 1
+
+            if line == "" :
+                continue
 
             # both '@' and '>' are legitimate quality scores
             # but '+' is a genuine delimiter
@@ -169,61 +177,10 @@ class FastqFile(DataFile) :
                     self._state = FastqFile.SEQID
                     return self.seq()
 
-        raise StopIteration
-
-    def readold(self) :
-        for line in self._filehandle :
-            line = line.strip()
-
-            self._linenum += 1
-
-            # annoyingly '>' is a valid quality score
-            if self._linenum == 1 :
-                self.__validate(line, FastqFile.SEQID)
-                self.SEQID_START = line[0]
-
-            if line.startswith(self.SEQID_START) :
-
-                seq = None
-
-                if self._current[FastqFile.SEQID] != None :
-                    print self.get_filename()
-                    print self._current[FastqFile.SEQ]
-                    print self._current[FastqFile.QUAL]
-                    seq = Sequence(self._current[FastqFile.SEQ], None if self.SEQID_START == '>' else self._current[FastqFile.QUAL])
-
-                self.__validate(line, FastqFile.SEQID)
-
-                self._current[FastqFile.SEQID] = line
-                self._current[FastqFile.SEQ] = ""
-                self._current[FastqFile.QUALID] = ""
-                self._current[FastqFile.QUAL] = ""
-                
-                self._state = FastqFile.SEQ
-
-                if seq != None :
-                    return seq
-
-                continue
-
-            if line.startswith('+') :
-                self.__validate(line, FastqFile.QUALID)
-                self._current[FastqFile.QUALID] = line
-                self._current[FastqFile.QUAL] = ""
-                self._state = FastqFile.QUAL
-                continue
-
-            if self._state == FastqFile.SEQ :
-                self.__validate(line, FastqFile.SEQ)
-                self._current[FastqFile.SEQ] += line
-                continue
-
-            if self._state == FastqFile.QUAL :
-                self.__validate(line, FastqFile.QUAL)
-                self._current[FastqFile.QUAL] += line
-                continue
-
-            raise ParseError("%s : state illegal" % type(self).__name__)
+        if self._current[FastqFile.SEQID].startswith('>') :
+            tmp = self.seq()
+            self._current[FastqFile.SEQID] = ""
+            return tmp
 
         raise StopIteration
 

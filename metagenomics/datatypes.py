@@ -24,7 +24,7 @@ class IUPAC(object) :
         'AGT'   : 'D',
         'CGT'   : 'B',
         'ACGT'  : 'N',
-        ''     : '-'
+        ''      : '-'
     }
 
     @staticmethod
@@ -47,7 +47,8 @@ class Sequence(object) :
         self.lengths = [len(seq)]
 
         if len(self.seq) != len(self.qual) :
-            raise SequenceError("lengths of sequence and qualities are not equal (s=%d q=%d)" % (len(self.seq), len(self.qual)))
+            raise SequenceError("lengths of sequence and qualities are not equal (s=%d q=%d)" % 
+                    (len(self.seq), len(self.qual)))
 
     def __generate_quals(self, qual_str) :
         if qual_str == None :
@@ -98,6 +99,9 @@ class Sequence(object) :
         s2 = seq2.sequence()
 
         return s1.startswith(s2) or s2.startswith(s1)
+
+    def __iter__(self) :
+        return self.sequence()
 
     def __contains__(self, ch) :
         return ch in self.sequence()
