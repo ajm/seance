@@ -1,5 +1,6 @@
 import sys
 import collections
+import os
 
 from metagenomics.filetypes import SffFile, FastqFile
 from metagenomics.tools import Sff2Fastq
@@ -25,6 +26,17 @@ class Sample(object) :
         self._fastq.close()
 
         #print str(self)
+
+    def print_sample(self) :
+        f = open(self._workingdir + os.sep + self._sff.get_basename() + ".sample", 'w')
+
+        for key,freq in self._seqcounts.most_common() :
+            #print >> f, "%d\t%d" % (key, freq)
+            print >> f, ">seq%d NumDuplicates=%d" % (key, freq)
+            print >> f, self._db.get(key)._canonical_sequence.sequence()
+            #print >> f, self._db.get(key)._compressed_rep
+
+        f.close()
 
     def __merge(self, fromkey, tokey) :
         self._seqcounts[tokey] += self._seqcounts[fromkey]

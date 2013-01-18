@@ -63,5 +63,9 @@ class WorkFlow(object) :
         p.end()
 
         print >> sys.stderr, "\n" + str(self.seqdb)
+
         self.seqdb.finalise()
         
+        for sample in self.samples :
+            sample.print_sample()
+

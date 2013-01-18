@@ -173,7 +173,6 @@ can use PAGAN to align them together and infer the representative sequence.
         return fname
 
     def generate_canonical_sequence(self) :
-
         # there is only one sequence anyway, 
         # so no alignment necessary
         if len(self._sequences) == 1 :
@@ -186,6 +185,7 @@ can use PAGAN to align them together and infer the representative sequence.
         chars = {}
 
         for seq in aligned :
+            seq.trim() # without this trim canonical sequence is median length of sequences in cluster
             for i in range(len(seq)) :
                 if not chars.has_key(i) :
                     chars[i] = collections.Counter()
@@ -235,10 +235,10 @@ can use PAGAN to align them together and infer the representative sequence.
     # first character is in case there was a homopolymer error in the 
     # MID that is not the same as the first character in the true sequence
     def __eq__(self, other) :
-        return self.__is_prefix(self._compressed_rep, other._compressed_rep) or \
-               self.__is_prefix(self._compressed_rep[1:], other._compressed_rep) or \
-               self.__is_prefix(self._compressed_rep, other._compressed_rep[1:])
-        #return self.__is_prefix(self._compressed_rep, other._compressed_rep)
+        #return self.__is_prefix(self._compressed_rep, other._compressed_rep) or \
+        #       self.__is_prefix(self._compressed_rep[1:], other._compressed_rep) or \
+        #       self.__is_prefix(self._compressed_rep, other._compressed_rep[1:])
+        return self.__is_prefix(self._compressed_rep, other._compressed_rep)
 
     # TODO : make this more natural
     def __len__(self) :

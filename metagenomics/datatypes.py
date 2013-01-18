@@ -100,6 +100,9 @@ class Sequence(object) :
 
         return s1.startswith(s2) or s2.startswith(s1)
 
+    def trim(self) :
+        self.truncate(len(self.sequence().rstrip('-')))
+
     def __iter__(self) :
         return self.sequence()
 
@@ -113,7 +116,7 @@ class Sequence(object) :
         return self.is_duplicate(other)
 
     def __lt__(self, other) :
-        return (not self.is_duplicate(other)) and (self.__repr__() < repr(other))
+        return repr(self) < repr(other)
 
     def __len__(self) :
         return self.rtrim - self.ltrim
