@@ -12,7 +12,7 @@ from metagenomics.progress import Progress
 
 class SequenceDB(object) :
     def __init__(self) :
-        self._db = SequenceTree()
+        self._db = SequenceDict()
 
     def put(self, seq) :
         return self._db.put(seq)
@@ -25,6 +25,9 @@ class SequenceDB(object) :
 
     def finalise(self) :
         self._db.finalise()
+
+    def __contains__(self, obj) :
+        self._db.__contains__(obj)
 
     def __len__(self) :
         return len(self._db)
@@ -127,6 +130,79 @@ class SequenceTree(object) :
         return "%s: added = %d, unique = %d, singulars = %d, max. cluster = %d" % \
                 (type(self).__name__, self.count, SequenceTree._count, self.singulars(), self.max_cluster())
 
+class SequenceDict(object):
+    def __init__(self) :
+        self.db = {}
+        self.translate = {}
+        self.count = 0
+
+    def generate_key(self, s) :
+        self.translate[s] = len(self.db)
+        return self.translate[s]
+
+    def put(self, seq) :
+        c = SequenceCluster(seq)
+        tkey = repr(c)
+        key = None
+
+        #if self.db.has_key(key) :
+        #    self.db[key].merge(c)
+        #else :
+        #    self.db[key] = c
+
+        if self.translate.has_key(tkey) :
+            key = self.translate[tkey]
+            self.db[key].merge(c)
+        else :
+            key = self.generate_key(tkey)
+            self.db[key] = c
+
+        self.count += 1
+
+        return key
+
+    def get(self, key) :
+        return self.db[key]
+
+    def finalise(self) :
+        p = Progress("Alignment", len(self.db))
+        p.start()
+
+        for sc in self.db.values() :
+            sc.generate_canonical_sequence()
+            sc.write_fasta(".canon")
+            p.increment()
+
+        p.end()
+
+    def singulars(self) :
+        tmp = 0
+
+        for k in self.db :
+            if self.db[k].is_singular() :
+                tmp += 1
+
+        return tmp
+
+    def max_cluster(self) :
+        tmp = -1
+
+        for k in self.db :
+            if len(self.db[k]) > tmp :
+                tmp = len(self.db[k])
+
+        return tmp
+
+    def __contains__(self, cseq) :
+        return self.db.has_key(cseq)
+
+    def __len__(self) :
+        return len(self.db)
+
+    def __str__(self) :
+        return "%s: added = %d, unique = %d, singulars = %d, max. cluster = %d" % \
+                (type(self).__name__, self.count, len(self), self.singulars(), self.max_cluster())
+
 @total_ordering
 class SequenceCluster(object) :
     """ 
@@ -144,25 +220,16 @@ can use PAGAN to align them together and infer the representative sequence.
 
     """
     def __init__(self, seq) :
-        self._compressed_rep = self.__compress(seq.sequence())
-        self._sequences = SortedList([seq])
-        self._canonical_sequence = None
+        self.compressed = seq.compressed
+        self.sequences = SortedList([seq])
+        self.canonical = None
 
     def merge(self, other) :
-        for seq in other._sequences :
-            self._sequences.insert(seq)
+        for seq in other.sequences :
+            self.sequences.insert(seq)
 
     def is_singular(self) :
-        return (len(self._sequences) == 1) and self._sequences[0].is_singular()
-
-    def __compress(self, seq) :
-        tmp = seq[0]
-
-        for i in seq[1:] :
-            if tmp[-1] != i :
-                tmp += i
-
-        return tmp
+        return (len(self.sequences) == 1) and self.sequences[0].is_singular()
 
     def write_fasta(self, ext=".fasta") :
         fname = System.tempfilename(ext)
@@ -175,17 +242,30 @@ can use PAGAN to align them together and infer the representative sequence.
     def generate_canonical_sequence(self) :
         # there is only one sequence anyway, 
         # so no alignment necessary
-        if len(self._sequences) == 1 :
-            self._canonical_sequence = self._sequences[0]
+        if len(self.sequences) == 1 :
+            self.canonical = self.sequences[0]
             return
 
+        # 1. align sequences
         #aligned = Pagan().get_454_alignment(self.write_fasta())
         aligned = Aligner1D().get_alignment(self.write_fasta())
+        aligned.open()
 
         chars = {}
 
+        # 2. parse aligned file
         for seq in aligned :
-            seq.trim() # without this trim canonical sequence is median length of sequences in cluster
+            # pagan adds the consensus sequence to the end, but
+            # we will do it ourselves using a weighted majority
+            # vote and allow IUPAC codes
+            if seq.id == ">consensus" :
+                continue
+
+            # trim trailing gaps
+            # or else canonical sequence will be median length
+            # of sequences in cluster
+            seq.rtrim('-')
+
             for i in range(len(seq)) :
                 if not chars.has_key(i) :
                     chars[i] = collections.Counter()
@@ -194,6 +274,7 @@ can use PAGAN to align them together and infer the representative sequence.
 
         aligned.close()
 
+        # 3. construct canonical sequence
         tmp = ""
         for i in range(max(chars.keys())) :
             # tmp2 is list of tuples of the form (character, frequency)
@@ -209,6 +290,8 @@ can use PAGAN to align them together and infer the representative sequence.
                 else :
                     break
 
+            # most frequent character might be ambiguous
+            # so give IUPAC code instead (not possible with Aligner1D)
             try :
                 iupac = IUPAC.get(bases)
 
@@ -220,75 +303,61 @@ can use PAGAN to align them together and infer the representative sequence.
             if iupac != '-' :
                 tmp += iupac
 
-        self._canonical_sequence = Sequence(tmp)
+        self.canonical = Sequence(tmp)
 
-        #print str(self._canonical_sequence)
-        #print aligned.get_filename()
+    def __iadd__(self, other) :
+        self.merge(other)
 
     def __lt__(self, other) :
         return repr(self) < repr(other)
 
-    def __is_prefix(self, seq1, seq2) :
-        return seq1.startswith(seq2) or seq2.startswith(seq1)
-
-    # comparing the compressed representative strings and ignoring the 
-    # first character is in case there was a homopolymer error in the 
-    # MID that is not the same as the first character in the true sequence
     def __eq__(self, other) :
-        #return self.__is_prefix(self._compressed_rep, other._compressed_rep) or \
-        #       self.__is_prefix(self._compressed_rep[1:], other._compressed_rep) or \
-        #       self.__is_prefix(self._compressed_rep, other._compressed_rep[1:])
-        return self.__is_prefix(self._compressed_rep, other._compressed_rep)
+        return self.compressed == other.compressed
 
-    # TODO : make this more natural
     def __len__(self) :
-        return sum(map(lambda x : len(x.lengths), self._sequences))
+        return sum(map(lambda x : x.duplicates, self.sequences))
 
     def __repr__(self) :
-        return repr(self._compressed_rep)
+        return repr(self.compressed)
 
     def __str__(self) :
-        #return self._compressed_rep
         tmp = ""
 
-        for i in range(len(self._sequences)) :
-            count = len(self._sequences[i].lengths)
-
-            tmp += (">seq%d NumDuplicates=%d\n" % (i, count))
-            tmp += self._sequences[i].sequence()
+        for i in range(len(self.sequences)) :
+            tmp += (">seq%d NumDuplicates=%d\n" % (i, self.sequences[i].duplicates))
+            tmp += self.sequences[i].sequence
             tmp += "\n"
 
-        if self._canonical_sequence != None :
+        if self.canonical != None :
             tmp += (">canonical NumDuplicates=%d\n" % len(self))
-            tmp += self._canonical_sequence.sequence()
+            tmp += self.canonical.sequence
 
         return tmp
 
 class SortedList(object) :
-    def __init__(self, dat=[]) :
-        self._data = dat
+    def __init__(self, data=[]) :
+        self.data = data
 
     def insert(self, obj) :
-        loc = bisect.bisect_left(self._data, obj) 
+        loc = bisect.bisect_left(self.data, obj) 
 
-        if (len(self._data) == loc) or (not self._data[loc].is_duplicate(obj)) :
-            self._data.insert(loc, obj)
+        if (len(self.data) == loc) or (not self.data[loc].is_duplicate(obj)) :
+            self.data.insert(loc, obj)
         else :
-            self._data[loc].merge(obj)
+            self.data[loc].merge(obj)
 
     def __getitem__(self, ind) :
-        return self._data[ind]
+        return self.data[ind]
 
     def __contains__(self, obj) :
-        return self._data[bisect.bisect_left(self._data, obj)] == obj
+        return self.data[bisect.bisect_left(self.data, obj)] == obj
 
     def __iter__(self) :
-        return iter(self._data)
+        return iter(self.data)
 
     def __len__(self) :
-        return len(self._data)
+        return len(self.data)
 
     def __str__(self) :
-        return str(self._data)
-
+        return str(self.data)
 

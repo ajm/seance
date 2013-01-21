@@ -39,42 +39,87 @@ class IUPAC(object) :
 @total_ordering
 class Sequence(object) :
     def __init__(self, seq, qual_str=None) :
-        self.seq = seq
+        self.sequence = seq
         self.qual_str = qual_str
-        self.qual = self.__generate_quals(qual_str)
-        self.ltrim = 0
-        self.rtrim = len(seq)
-        self.lengths = [len(seq)]
 
-        if len(self.seq) != len(self.qual) :
-            raise SequenceError("lengths of sequence and qualities are not equal (s=%d q=%d)" % 
-                    (len(self.seq), len(self.qual)))
+        if self.qual_str :
+            if len(self.sequence) != len(self.qual_str) :
+                raise SequenceError("lengths of sequence and qualities are not equal (s=%d q=%d)" % 
+                    (len(self.sequence), len(self.qual_str)))
+
+        self.qualities = self.__generate_quals(qual_str)
+        self.compressed = self.__compress(self.sequence)
+        self.duplicates = 1
+        self.id = None
+
+    def __compress(self, seq) :
+        tmp = seq[0]
+
+        for i in seq[1:] :
+            if tmp[-1] != i :
+                tmp += i
+
+        return tmp
+
+    def __compress2(self, seq, length) :
+        ctmp = stmp = seq[0]
+
+        for i in seq[1:] :
+            stmp += i
+            if ctmp[-1] != i :
+                ctmp += i
+            if len(ctmp) == length :
+                break
+
+        return ctmp, stmp
 
     def __generate_quals(self, qual_str) :
-        if qual_str == None :
-            return len(self.seq) * [126]
-        
-        return map(Sequence.convert_quality, qual_str)
+        if qual_str is None :
+            return []
 
-    def __bounded(self, s) :
-        return s[self.ltrim : self.rtrim]
-
-    def sequence(self) :
-        return self.__bounded(self.seq)
-
-    def qualities(self) :
-        return self.__bounded(self.qual)
+        return map(Sequence.quality_to_int, qual_str)
 
     def truncate(self, length) :
-        diff = len(self) - length
-        if diff > 0 :
-            self.rtrim -= diff
+        self.sequence = self.sequence[:length]
+        self.compressed = self.__compress(self.sequence)
+        
+        if self.qual_str :
+            self.qual_str = self.qual_str[:length]
+            self.qualities = self.qualities[:length]
 
+    def ctruncate(self, length) :
+        self.compressed, self.sequence = self.__compress2(self.sequence, length)
+        
+        if self.qual_str :
+            self.qual_str = self.qual_str[len(self.sequence):]
+            self.qualities = self.qualities[len(self.sequence):]
+
+    def rtrim(self, char='-') :
+        self.truncate(len(self.sequence.rstrip(char)))
+
+    def ltrim(self, char='-') :
+        self.sequence.lstrip(char)
+        self.compressed = self.__compress(self.sequence)
+
+        if self.qual_str :
+            tmp = len(self.qual_str) - len(self.sequence)
+            self.qual_str = self.qual_str[tmp:]
+            self.qualities = self.qualities[tmp:]
+
+    def remove_mid(self) :
+        self.sequence = self.sequence[10:]
+        self.compressed = self.__compress(self.sequence)
+
+        if self.qual_str :
+            self.qual_str = self.qual_str[10:]
+            self.qualities = self.qualities[10:]
+
+    # XXX necessary?
     def is_singular(self) :
-        return len(self.lengths) == 1
+        return self.duplicates == 1
 
     @staticmethod
-    def convert_quality(q) :
+    def quality_to_int(q) :
         qu = ord(q) - 33
         
         if qu < 0 or qu > 126 :
@@ -82,35 +127,40 @@ class Sequence(object) :
         
         return qu
 
+    @staticmethod
+    def int_to_quality(i) :
+        return chr(i + 33)
+
     def merge(self, seq2) :
         if not self.is_duplicate(seq2) :
-            raise SequenceError('merging two sequences where one was not duplicate!')
+            raise SequenceError('cannot merge two non-duplicate sequences')
 
-        if len(seq2.seq) > len(self.seq) :
-            self.seq = seq2.seq
-            self.ltrim = seq2.ltrim
-            self.rtrim = seq2.rtrim
+        if len(seq2) > len(self) :
+            self.sequence = seq2.sequence
 
-        self.qual = map(lambda y : max(y), map(lambda *x : tuple(x), self.qual, seq2.qual))
-        self.lengths += seq2.lengths
+        if self.qual_str :
+            self.qualities = map(lambda y : max(y), map(lambda *x : tuple(x), self.qualities, seq2.qualities))
+            self.qual_str = ''.join(map(Sequence.int_to_quality, self.qualities))
+        
+        self.duplicates += seq2.duplicates
 
     def is_duplicate(self, seq2) :
-        s1 = self.sequence()
-        s2 = seq2.sequence()
+        s1 = self.sequence
+        s2 = seq2.sequence
 
         return s1.startswith(s2) or s2.startswith(s1)
 
-    def trim(self) :
-        self.truncate(len(self.sequence().rstrip('-')))
+    def __iadd__(self, other) :
+        self.merge(other)
 
     def __iter__(self) :
-        return self.sequence()
+        return self.sequence
 
     def __contains__(self, ch) :
-        return ch in self.sequence()
+        return ch in self.sequence
 
     def __getitem__(self, i) :
-        return self.sequence()[i]
+        return self.sequence[i]
 
     def __eq__(self, other) :
         return self.is_duplicate(other)
@@ -119,19 +169,19 @@ class Sequence(object) :
         return repr(self) < repr(other)
 
     def __len__(self) :
-        return self.rtrim - self.ltrim
+        return len(self.sequence)
 
     def __repr__(self) :
-        return repr(self.sequence())
+        return repr(self.sequence)
 
     def __str__(self) :
-        #return "@%s\n%s\n+\n%s" % ("seq", self.sequence(), self.__bounded(self.qual_str))
         tmp = '@' if self.qual_str else '>'
-        s = "%s%s\n%s\n" % (tmp, "seq", self.sequence())
+        s = "%s%s\n%s\n" % (tmp, "seq", self.sequence)
+        
         if self.qual_str :
-            s += ("+\n%s\n" % (self.__bounded(self.qual_str)))
+            s += ("+\n%s\n" % self.qual_str)
+        
         return s
-
 
 class SampleMetadata(object) :
     def __init__(self) :

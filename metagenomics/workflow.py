@@ -28,39 +28,50 @@ class WorkFlow(object) :
 
         return map(lambda x : NematodeSample(x, self.temp_directory, self.seqdb, mdr.get(x)), self.__get_datafiles())
 
-    def __build_filter(self) :
+    def __build_filter(self, phase) :
         mf = MultiFilter()
 
-        mf.add(TrimLeftFilter(10))
-
+        mf.add(MIDHomopolymer(True if phase == 1 else False))
+        
         if self.options['remove-nbases'] :
             mf.add(AmbiguousFilter())
 
-        if self.options['minlength'] != None :
-            mf.add(LengthFilter(self.options['minlength']))
+        mf.add(CompressedLengthFilter(self.options['compressed-length']))
 
-        if self.options['maxlength'] != None :
-            mf.add(TrimRightFilter(self.options['maxlength']))
-
-        if self.options['minquality'] != None :
-            if self.options['winquality'] != None :
-                mf.add(WindowedQualityFilter(self.options['minquality'], self.options['winquality']))
+        if self.options['minimum-quality'] != None :
+            if self.options['window-length'] != None :
+                mf.add(WindowedQualityFilter(self.options['minimum-quality'], self.options['window-length']))
             else :
-                mf.add(AverageQualityFilter(self.options['minquality']))
+                mf.add(AverageQualityFilter(self.options['minimum-quality']))
 
         return mf
 
     def run(self) :
-        mf = self.__build_filter()
+        # first pass: ignore mid homopolymer issues
+        mf = self.__build_filter(1)
 
         p = Progress("Reading samples", len(self.samples))
         p.start()
 
         for sample in self.samples :
-            sample.preprocess(mf)
+            sample.preprocess(mf, self.options['compressed-length'], ignore_first_homopolymer=False)
             p.increment()
 
         p.end()
+
+
+        # second pass: handle mid homopolymer sequences
+        mf = self.__build_filter(2)
+
+        p = Progress("Reading samples again", len(self.samples))
+        p.start()
+
+        for sample in self.samples :
+            sample.preprocess(mf, self.options['compressed-length'], ignore_first_homopolymer=True)
+            p.increment()
+
+        p.end()
+
 
         print >> sys.stderr, "\n" + str(self.seqdb)
 
@@ -68,4 +79,5 @@ class WorkFlow(object) :
         
         for sample in self.samples :
             sample.print_sample()
+
 

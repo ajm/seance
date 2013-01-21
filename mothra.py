@@ -14,11 +14,10 @@ def get_default_options() :
             "tempdir"       : None,
             "metadata"      : None,
             "verbose"       : True,
-            "minlength"     : 100,
-            "maxlength"     : None,
-            "minquality"    : 20,
-            "winquality"    : None,
-            "remove-nbases" : True
+            "compressed-length" : 300, 
+            "minimum-quality"   : 20,
+            "window-length"     : None,
+            "remove-nbases"     : True
            }
 
 def get_mandatory_options() :
@@ -48,19 +47,18 @@ def usage() :
     options = get_default_options()
 
     print >> sys.stderr, """Usage: %s [OPTIONS]
-    -d      --datadir       (default = %s)
-    -t      --tempdir       (default = %s)
-    -m      --metadata      (default = %s)
-    -l      --minlength     (default = %s)
-    -x      --maxlength     (default = %s)
-    -q      --minquality    (default = %s)
-    -w      --winquality    (default = %s)
-    -n      --remove-nbases (default = %s)
-    -v      --verbose
+    -d      --datadir           (default = %s)
+    -t      --tempdir           (default = %s)
+    -m      --metadata          (default = %s)
+    -q      --minimum-quality   (default = %s)
+    -w      --window-length     (default = %s)
+    -n      --remove-nbases     (default = %s)
+    -l      --compressed-length (default = %s)
+    -v      --verbose           (default = %s)
     -h      --help
 """ % (sys.argv[0], str(options['datadir']), str(options['tempdir']), 
-       str(options['metadata']), str(options['minlength']), str(options['minquality']), 
-       str(options['maxlength']), str(options['winquality']), str(options['remove-nbases']))
+       str(options['metadata']), str(options['minimum-quality']), str(options['window-length']), 
+       str(options['remove-nbases']), str(options['compressed-length']), str(options['verbose']))
 
 def expect_int(parameter, argument) :
     try :
@@ -77,8 +75,17 @@ def parse_args() :
     try :
         opts,args = getopt.getopt(
                         sys.argv[1:],
-                        "d:t:m:hl:q:w:x:",
-                        ["datadir=", "tempdir=", "metadata=", "help", "minlength=", "minquality=", "winquality=", "maxquality"]
+                        "d:t:m:hq:w:l:",
+                        [   "help", 
+                            "verbose", 
+                            "datadir=", 
+                            "tempdir=", 
+                            "metadata=", 
+                            "minimum-quality=", 
+                            "window-length=", 
+                            "remove-nbases=", 
+                            "compressed-length="
+                        ]
                     )
 
     except getopt.GetoptError, err :
@@ -111,6 +118,9 @@ def parse_args() :
 
         elif o in ('-w', '--winquality') :
             options['winquality'] = expect_int("winquality", a)
+
+        elif o in ('-c', '--compress-length') :
+            options['compress-length'] = expect_int("compressed-length", a)
 
         else :
             assert False, "unhandled option %s" % o

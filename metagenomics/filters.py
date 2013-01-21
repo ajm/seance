@@ -1,5 +1,6 @@
 import sys
 import abc
+import operator
 
 class FilterError(Exception) :
     pass
@@ -44,20 +45,15 @@ class LengthFilter(Filter) :
     def accept(self, seq) :
         return len(seq) > self.length
 
-class TrimLeftFilter(Filter) :
-    def __init__(self, trim) :
-        self.trim = trim
-
+class CompressedLengthFilter(LengthFilter) :
+    def __init__(self, length) :
+        super(CompressedLengthFilter, self).__init__(length)
+    
     def accept(self, seq) :
-        seq.ltrim = self.trim
-        return True
+        if len(seq.compressed) < self.length :
+            return False
 
-class TrimRightFilter(Filter) :
-    def __init__(self, maxlen) :
-        self.maxlen = maxlen
-
-    def accept(self, seq) :
-        seq.truncate(self.maxlen)
+        #seq.ctruncate(self.length)
         return True
 
 class AmbiguousFilter(Filter) :
@@ -66,31 +62,38 @@ class AmbiguousFilter(Filter) :
 
 class AverageQualityFilter(Filter) :
     def __init__(self, qual) :
-        self._qual = qual
+        self.qual = qual
 
     def accept(self, seq) :
-        tmp = seq.qualities()
-        return (sum(tmp) / float(len(tmp))) >= self._qual
+        tmp = seq.qualities
+        return (sum(tmp) / float(len(tmp))) >= self.qual
 
 class WindowedQualityFilter(Filter) :
     def __init__(self, qual, winlen) :
-        self.__qual = qual
-        self.__winlen = winlen
+        self.qual = qual
+        self.winlen = winlen
 
     def accept(self, seq) :
-        if len(seq) < self.__winlen :
+        if len(seq) < self.winlen :
             return False
 
-        qual = seq.qualities()
-        qualsum = sum(qual[:self.__winlen])
-        total = self.__qual * self.__winlen
+        qual = seq.qualities
+        qualsum = sum(qual[:self.winlen])
+        total = self.qual * self.winlen
 
-        for i in range(len(seq) - self.__winlen) :
+        for i in range(len(seq) - self.winlen) :
             if i != 0 :
-                qualsum = qualsum - qual[i-1] + qual[i + self.__winlen - 1]
+                qualsum = qualsum - qual[i-1] + qual[i + self.winlen - 1]
 
             if qualsum < total :
                 return False
-            
+
         return True
+
+class MIDHomopolymer(Filter) :
+    def __init__(self, reject=True) :
+        self.op = operator.ne if reject else operator.eq
+
+    def accept(self, seq) :
+        return self.op(seq[9], seq[10])
 

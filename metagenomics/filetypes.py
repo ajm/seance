@@ -58,7 +58,7 @@ class FastqFile(DataFile) :
 
     def __init__(self, fname) :
         super(FastqFile, self).__init__(fname, ".fastq")
-        self._filehandle = open(self.get_filename())
+        self._filehandle = None #open(self.get_filename())
         self._state = FastqFile.SEQID
         self._linenum = 0
 
@@ -99,7 +99,7 @@ class FastqFile(DataFile) :
 
         for i in uniq :
             try :
-                Sequence.convert_quality(i)
+                Sequence.quality_to_int(i)
         
             except ValueError, ve :
                 raise ParseError("%s : line %d contained an invalid quality value (%s)" % \
@@ -114,8 +114,15 @@ class FastqFile(DataFile) :
     def next(self) :
         return self.read()
 
+    def open(self) :
+        if self._filehandle :
+            self._filehandle.close()
+
+        self._filehandle = open(self.get_filename())
+
     def close(self) :
-        self._filehandle.close()
+        if self._filehandle :
+            self._filehandle.close()
 
     def seq(self) :
         duplicates = 1

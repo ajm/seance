@@ -57,7 +57,8 @@ class Sff2Fastq(ExternalProgram) :
 class Pagan(ExternalProgram) :
     def __init__(self) :
         super(Pagan, self).__init__('pagan')
-        self.command = "pagan --use-consensus --consensus-minimum=3 --use-duplicate-weigths --454 --queryfile %s --outfile %s &> /dev/null"
+        #self.command = "pagan --use-consensus --consensus-minimum=3 --use-duplicate-weigths --454 --queryfile %s --outfile %s &> /dev/null"
+        self.command = "pagan --use-consensus --use-duplicate-weigths --homopolymer --queryfile %s --outfile %s --use-prefix-anchors --pileup-alignment --no-terminal-edges &> /dev/null"
 
     def get_454_alignment(self, fasta_fname) :
         out_fname = fasta_fname + ".out"
@@ -114,6 +115,8 @@ class Aligner1D(object) :
         self.__reset()
 
         fq = FastqFile(fname)
+
+        fq.open()
 
         for seq in fq :
             self.sequences.append(seq)
