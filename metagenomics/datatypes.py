@@ -91,8 +91,8 @@ class Sequence(object) :
         self.compressed, self.sequence = self.__compress2(self.sequence, length)
         
         if self.qual_str :
-            self.qual_str = self.qual_str[len(self.sequence):]
-            self.qualities = self.qualities[len(self.sequence):]
+            self.qual_str = self.qual_str[:len(self.sequence)]
+            self.qualities = self.qualities[:len(self.sequence)]
 
     def rtrim(self, char='-') :
         self.truncate(len(self.sequence.rstrip(char)))
