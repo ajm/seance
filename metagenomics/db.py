@@ -27,7 +27,7 @@ class SequenceDB(object) :
         self._db.finalise()
 
     def __contains__(self, obj) :
-        self._db.__contains__(obj)
+        return obj in self._db
 
     def __len__(self) :
         return len(self._db)
@@ -193,8 +193,11 @@ class SequenceDict(object):
 
         return tmp
 
+    def has_sequence(self, cseq) :
+        return self.translate.has_key(cseq)
+
     def __contains__(self, cseq) :
-        return self.db.has_key(cseq)
+        return self.has_sequence(cseq)
 
     def __len__(self) :
         return len(self.db)
@@ -318,7 +321,7 @@ can use PAGAN to align them together and infer the representative sequence.
         return sum(map(lambda x : x.duplicates, self.sequences))
 
     def __repr__(self) :
-        return repr(self.compressed)
+        return self.compressed
 
     def __str__(self) :
         tmp = ""

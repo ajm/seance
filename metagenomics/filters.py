@@ -47,7 +47,9 @@ class LengthFilter(Filter) :
 
 class CompressedLengthFilter(LengthFilter) :
     def __init__(self, length) :
-        super(CompressedLengthFilter, self).__init__(length)
+        super(CompressedLengthFilter, self).__init__(length+11) 
+        # XXX +11 for worst-case scenario: no runs of characters in the mid tag, 
+        # but last character in the mid is wrongly extended
     
     def accept(self, seq) :
         if len(seq.compressed) < self.length :

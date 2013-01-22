@@ -51,7 +51,7 @@ class WorkFlow(object) :
         # two passes over all the samples
         # first : ignore reads where a homopolymer from the mid appears to bleed into the rest of the read
         # seconds : handle ignored reads
-        for phase,ignore_first in [(1, False),(2, True)] :
+        for phase,ignore_first in [(1, False), (2, True)] :
             mf = self.__build_filter(phase)
 
             p = Progress("Reading samples (pass %d)" % phase, len(self.samples))
@@ -70,19 +70,20 @@ class WorkFlow(object) :
         self.seqdb.finalise()
 
         # get ids from each sample
-        ids = collections.Counter()
-        for sample in self.samples :
-            for key in sample.seqcounts.keys() :
-                ids[key] += 1
-        
-        tmp = []
-        for key,count in ids.items() :
-            if count > 1 :
-                tmp.append(key)
-
+#        ids = collections.Counter()
+#        for sample in self.samples :
+#            for key in sample.seqcounts.keys() :
+#                ids[key] += 1
+#        
+#        tmp = []
+#        for key,count in ids.items() :
+#            if count > 1 :
+#                tmp.append(key)
+#
         # print out samples
         for sample in self.samples :
-            sample.print_sample(tmp)
+            sample.print_sample()
+#            sample.print_sample(tmp)
 
 
         print >> sys.stderr, "\n" + str(self.seqdb)

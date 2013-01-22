@@ -1,6 +1,7 @@
 import sys
 import collections
 import os
+import copy
 
 from metagenomics.filetypes import SffFile, FastqFile
 from metagenomics.tools import Sff2Fastq, GetMID
@@ -37,14 +38,22 @@ class Sample(object) :
                 # sequence is already in the database, if this sequence is genuine (ie: not starting
                 # with a homopolymer from the mid, then any more will be clustered with it anyway)
                 if ignore_first_homopolymer :
+                    #print "ifh %d %s" % (len(seq.compressed[1:compressed_length+1]), str(set(map(len, self.db._db.translate.keys()))))
+
                     if seq.compressed[1:compressed_length+1] in self.db :
+                        #print "pre ", seq.sequence
                         seq.ltrim(seq[0])
+                        #print "post", seq.sequence
+                        #print ""
 
                 # the database can only handle sequences where the compressed representation of
                 # that sequence are of identical length
                 seq.ctruncate(compressed_length)
 
-                self.seqcounts[self.db.put(seq)] += 1
+                #self.seqcounts[self.db.put(seq)] += 1
+
+                token = self.db.put(seq)
+                self.seqcounts[token] += 1
 
         self.fastq.close()
 

@@ -82,7 +82,7 @@ class Sequence(object) :
     def truncate(self, length) :
         self.sequence = self.sequence[:length]
         self.compressed = self.__compress(self.sequence)
-        
+
         if self.qual_str :
             self.qual_str = self.qual_str[:length]
             self.qualities = self.qualities[:length]
@@ -98,7 +98,7 @@ class Sequence(object) :
         self.truncate(len(self.sequence.rstrip(char)))
 
     def ltrim(self, char='-') :
-        self.sequence.lstrip(char)
+        self.sequence = self.sequence.lstrip(char)
         self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
