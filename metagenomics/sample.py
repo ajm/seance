@@ -3,7 +3,7 @@ import collections
 import os
 
 from metagenomics.filetypes import SffFile, FastqFile
-from metagenomics.tools import Sff2Fastq
+from metagenomics.tools import Sff2Fastq, GetMID
 from metagenomics.filters import Filter
 from metagenomics.db import SequenceDB
 
@@ -15,11 +15,19 @@ class Sample(object) :
         self.db = seqdb
         self.seqcounts = collections.Counter()
 
-    def preprocess(self, filt, compressed_length, ignore_first_homopolymer=False) :
+    def preprocess(self, filt, compressed_length, mid_errors=1, ignore_first_homopolymer=False) :
+
+        mid = GetMID().run(self.fastq.get_filename())
+
         self.fastq.open()
 
         for seq in self.fastq :
             if filt.accept(seq) :
+                # ensure there are not too many errors in the mid
+                if self.__hamming_distance(mid, seq[:10]) > mid_errors :
+                    continue
+
+                # everything else assumes the mid does not exist
                 seq.remove_mid()
 
                 # if the last character of the mid is the same as the first character
@@ -40,14 +48,18 @@ class Sample(object) :
 
         self.fastq.close()
 
-    def print_sample(self) :
+    def print_sample(self, keys=None) :
         f = open(self.workingdir + os.sep + self.sff.get_basename() + ".sample", 'w')
 
         for key,freq in self.seqcounts.most_common() :
-            print >> f, ">seq%d NumDuplicates=%d" % (key, freq)
-            print >> f, self.db.get(key).canonical.sequence
+            if (keys is None) or (key in keys) :
+                print >> f, ">seq%d NumDuplicates=%d" % (key, freq)
+                print >> f, self.db.get(key).canonical.sequence
 
         f.close()
+
+    def __hamming_distance(self, mid, seq) :
+        return len(filter(lambda x: x[0] != x[1], zip(mid, seq)))
 
     def __merge(self, fromkey, tokey) :
         self.seqcounts[tokey] += self.seqcounts[fromkey]

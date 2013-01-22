@@ -1,6 +1,7 @@
 import sys
 import os
 import glob
+import collections
 
 from metagenomics.sample import NematodeSample
 from metagenomics.filetypes import MetadataReader
@@ -47,37 +48,41 @@ class WorkFlow(object) :
         return mf
 
     def run(self) :
-        # first pass: ignore mid homopolymer issues
-        mf = self.__build_filter(1)
+        # two passes over all the samples
+        # first : ignore reads where a homopolymer from the mid appears to bleed into the rest of the read
+        # seconds : handle ignored reads
+        for phase,ignore_first in [(1, False),(2, True)] :
+            mf = self.__build_filter(phase)
 
-        p = Progress("Reading samples", len(self.samples))
-        p.start()
+            p = Progress("Reading samples (pass %d)" % phase, len(self.samples))
+            p.start()
 
+            for sample in self.samples :
+                sample.preprocess(mf, 
+                        self.options['compressed-length'], 
+                        mid_errors=self.options['mid-errors'], 
+                        ignore_first_homopolymer=ignore_first)
+                p.increment()
+
+            p.end()
+
+        # get canonical sequences
+        self.seqdb.finalise()
+
+        # get ids from each sample
+        ids = collections.Counter()
         for sample in self.samples :
-            sample.preprocess(mf, self.options['compressed-length'], ignore_first_homopolymer=False)
-            p.increment()
+            for key in sample.seqcounts.keys() :
+                ids[key] += 1
+        
+        tmp = []
+        for key,count in ids.items() :
+            if count > 1 :
+                tmp.append(key)
 
-        p.end()
-
-
-        # second pass: handle mid homopolymer sequences
-        mf = self.__build_filter(2)
-
-        p = Progress("Reading samples again", len(self.samples))
-        p.start()
-
+        # print out samples
         for sample in self.samples :
-            sample.preprocess(mf, self.options['compressed-length'], ignore_first_homopolymer=True)
-            p.increment()
-
-        p.end()
+            sample.print_sample(tmp)
 
 
         print >> sys.stderr, "\n" + str(self.seqdb)
-
-        self.seqdb.finalise()
-        
-        for sample in self.samples :
-            sample.print_sample()
-
-

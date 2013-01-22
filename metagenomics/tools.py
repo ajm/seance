@@ -1,6 +1,8 @@
 import sys
 import abc
 import os
+import commands
+import re
 
 from metagenomics.filetypes import SffFile, FastqFile
 
@@ -53,6 +55,22 @@ class Sff2Fastq(ExternalProgram) :
             sys.exit(-1)
         
         return FastqFile(fastq_fname)
+
+class GetMID(object) :
+    def __init__(self) :
+        self.command = "grep -A1 \"^@\" %s | grep -v \"^[@-]\" | awk '{ print substr($0, 0, 10) }' | sort | uniq -c | sort -g | tail -1 | awk '{ print $2 }'"
+
+    def run(self, fastq_name) :
+        status,output = commands.getstatusoutput(self.command % fastq_name)
+
+        if status != 0 :
+            raise ExternalProgramError("%s: %s", type(self).__name__, output)
+
+        output = output.strip()
+        if re.match("[GATC]{10}", output) == None :
+            raise ExternalProgramError("%s: %s does not look like a MID", type(self).__name__, output)
+
+        return output
 
 class Pagan(ExternalProgram) :
     def __init__(self) :

@@ -17,7 +17,8 @@ def get_default_options() :
             "compressed-length" : 300, 
             "minimum-quality"   : 20,
             "window-length"     : None,
-            "remove-nbases"     : True
+            "remove-nbases"     : True,
+            "mid-errors"        : 0
            }
 
 def get_mandatory_options() :
@@ -54,11 +55,13 @@ def usage() :
     -w      --window-length     (default = %s)
     -n      --remove-nbases     (default = %s)
     -l      --compressed-length (default = %s)
+    -e      --mid-errors        (default = %s)
     -v      --verbose           (default = %s)
     -h      --help
 """ % (sys.argv[0], str(options['datadir']), str(options['tempdir']), 
        str(options['metadata']), str(options['minimum-quality']), str(options['window-length']), 
-       str(options['remove-nbases']), str(options['compressed-length']), str(options['verbose']))
+       str(options['remove-nbases']), str(options['compressed-length']), str(options['mid-errors']), 
+       str(options['verbose']))
 
 def expect_int(parameter, argument) :
     try :
@@ -75,7 +78,7 @@ def parse_args() :
     try :
         opts,args = getopt.getopt(
                         sys.argv[1:],
-                        "d:t:m:hq:w:l:",
+                        "d:t:m:hnq:w:l:e:",
                         [   "help", 
                             "verbose", 
                             "datadir=", 
@@ -83,8 +86,9 @@ def parse_args() :
                             "metadata=", 
                             "minimum-quality=", 
                             "window-length=", 
-                            "remove-nbases=", 
-                            "compressed-length="
+                            "remove-nbases", 
+                            "compressed-length=",
+                            "mid-errors="
                         ]
                     )
 
@@ -107,20 +111,23 @@ def parse_args() :
         elif o in ('-m', '--metadata') :
             options['metadata'] = a
 
-        elif o in ('-l', '--minlength') :
-            options['minlength'] = expect_int("minlength", a)
-
-        elif o in ('-x', '--maxlength') :
-            options['maxlength'] = expect_int("maxlength", a)
-
-        elif o in ('-q', '--minquality') :
+        elif o in ('-q', '--minimum-quality') :
             options['minquality'] = expect_int("minquality", a)
 
-        elif o in ('-w', '--winquality') :
+        elif o in ('-w', '--window-length') :
             options['winquality'] = expect_int("winquality", a)
+
+        elif o in ('-n', '--remove-nbases') :
+            options['remove-nbases'] = True # XXX this can never be false...
 
         elif o in ('-c', '--compress-length') :
             options['compress-length'] = expect_int("compressed-length", a)
+        
+        elif o in ('-e', '--mid-errors') :
+            options['mid-errors'] = expect_int("mid-errors", a)
+
+        elif o in ('-v', '--verbose') :
+            options['verbose'] = True
 
         else :
             assert False, "unhandled option %s" % o
