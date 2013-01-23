@@ -26,6 +26,9 @@ class SequenceDB(object) :
     def finalise(self) :
         self._db.finalise()
 
+    def print_database(self, fname) :
+        self._db.print_database(fname)
+
     def __contains__(self, obj) :
         return obj in self._db
 
@@ -34,101 +37,6 @@ class SequenceDB(object) :
 
     def __str__(self) :
         return str(self._db)
-
-class SequenceTree(object) :
-    _count = 0
-    _db = {}
-
-    def __init__(self) :
-        self.left = None
-        self.right = None
-        self.data = None
-
-        self.count = 0
-        self.token = SequenceTree._count
-        SequenceTree._db[self.token] = self
-        SequenceTree._count += 1
-
-    def put(self, seq) :
-        return self.add_cluster(SequenceCluster(seq))
-
-    def get(self, key) :
-        return SequenceTree._db[key].data
-
-    def debug(self) :
-        for i in SequenceTree._db.values() :
-            f = open("cluster_%d.fasta" % i.token, 'w')
-            print >> f, str(i.data)
-            f.close()
-
-    def finalise(self) :
-        p = Progress("Alignment", len(SequenceTree._db.values()))
-        p.start()
-
-        for sc in SequenceTree._db.values() :
-            sc.data.generate_canonical_sequence()
-            sc.data.write_fasta(".canon")
-            p.increment()
-
-        p.end()
-
-    def add_cluster(self, clust) :
-        self.count += 1
-
-        if self.data is None :
-            self.data = clust
-            return self.token
-
-        elif self.data == clust :
-            self.data.merge(clust)
-            return self.token
-
-        elif self.data < clust :
-            if self.left is None :
-                self.left = SequenceTree()
-            
-            return self.left.add_cluster(clust)
-
-        else :
-            if self.right is None :
-                self.right = SequenceTree()
-            
-            return self.right.add_cluster(clust)
-
-    def singulars(self) :
-        tmp = 0
-
-        if self.data and self.data.is_singular() :
-            tmp += 1
-            
-        if self.left :
-            tmp += self.left.singulars()
-            
-        if self.right :
-            tmp += self.right.singulars()
-
-        return tmp
-
-    def max_cluster(self) :
-        tmp = [0]
-
-        if self.left :
-            tmp.append(self.left.max_cluster())
-
-        if self.right :
-            tmp.append(self.right.max_cluster())
-
-        if self.data :
-            tmp.append(len(self.data))
-
-        return max(tmp)
-
-    def __len__(self) :
-        return SequenceTree._count
-
-    def __str__(self) :
-        return "%s: added = %d, unique = %d, singulars = %d, max. cluster = %d" % \
-                (type(self).__name__, self.count, SequenceTree._count, self.singulars(), self.max_cluster())
 
 class SequenceDict(object):
     def __init__(self) :
@@ -192,6 +100,15 @@ class SequenceDict(object):
                 tmp = len(self.db[k])
 
         return tmp
+
+    def print_database(self, fname) :
+        f = open(fname, 'w')
+
+        for seqclust_key in sorted(self.db, reverse=True, key=lambda x : len(self.db[x])) :
+            print >> f, ">seq%d NumDuplicates=%d" % (seqclust_key, len(self.db[seqclust_key]))
+            print >> f, self.db[seqclust_key].canonical.sequence
+
+        f.close()
 
     def has_sequence(self, cseq) :
         return self.translate.has_key(cseq)

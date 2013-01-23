@@ -79,11 +79,19 @@ class WorkFlow(object) :
 #        for key,count in ids.items() :
 #            if count > 1 :
 #                tmp.append(key)
-#
+
+        p = Progress("Clustering", len(self.samples))
+        p.start()
+
         # print out samples
         for sample in self.samples :
-            sample.print_sample()
-#            sample.print_sample(tmp)
+            sample.simple_cluster(0.97)
+#            sample.print_sample_raw(tmp)
+            p.increment()
 
+        p.end()
+
+        self.seqdb.print_database(self.temp_directory + os.sep + "database.fasta")
 
         print >> sys.stderr, "\n" + str(self.seqdb)
+

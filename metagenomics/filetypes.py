@@ -14,6 +14,10 @@ class DataFile(object) :
         if not self.__exists() :
             raise DataFileError("'%s' does not exist" % self.get_filename())
 
+    @property
+    def name(self) :
+        return self.get_filename()
+
     def __exists(self) :
         return os.path.isfile(self.get_filename())
 
