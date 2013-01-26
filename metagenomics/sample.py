@@ -5,7 +5,7 @@ import copy
 import math
 
 from metagenomics.filetypes import SffFile, FastqFile
-from metagenomics.tools import Sff2Fastq, GetMID, Pagan
+from metagenomics.tools import Sff2Fastq, GetMID, Pagan, Uchime
 from metagenomics.filters import Filter
 from metagenomics.db import SequenceDB
 
@@ -16,6 +16,7 @@ class Sample(object) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
         self.db = seqdb
         self.seqcounts = collections.Counter()
+        self.chimeras = []
 
     def preprocess(self, filt, compressed_length, mid_errors=1, ignore_first_homopolymer=False) :
 
@@ -54,8 +55,6 @@ class Sample(object) :
         threshold = math.ceil(self.__average_length() * (1.0 - similarity))
         clusters = []
 
-        #print "\nsimilarity = %.2f, max. hamming distance = %d\n" % (similarity, threshold)
-
         # perform multiple alignment
         fq = Pagan().get_454_alignment(self.print_sample_raw())
         fq.open()
@@ -79,8 +78,6 @@ class Sample(object) :
 
         fq.close()
 
-        print "\n" + fq.name
-
         # print out clusters
         f = open(self.workingdir + os.sep + self.sff.get_basename() + ".cluster", 'w')
 
@@ -91,20 +88,20 @@ class Sample(object) :
 
         f.close()
 
-    def print_sample_raw(self, keys=None) :
+    def detect_chimeras(self) :
+        self.chimeras = Uchime().run(self.print_sample_raw(duplicate_label="/ab"))
+
+    def print_sample_raw(self, whitelist=None, duplicate_label=" NumDuplicates") :
         f = open(self.workingdir + os.sep + self.sff.get_basename() + ".sample", 'w')
 
         for key,freq in self.seqcounts.most_common() :
-            if (keys is None) or (key in keys) :
-                print >> f, ">seq%d NumDuplicates=%d" % (key, freq)
+            if ((whitelist is None) or (key in whitelist)) and (key not in self.chimeras) :
+                print >> f, ">seq%d%s=%d" % (key, duplicate_label, freq)
                 print >> f, self.db.get(key).canonical.sequence
 
         f.close()
 
         return f.name
-
-    def print_sample_otu(self) :
-        pass
 
     def __hamming_distance(self, mid, seq) :
         return len(filter(lambda x: x[0] != x[1], zip(mid, seq)))

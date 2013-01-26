@@ -80,16 +80,21 @@ class WorkFlow(object) :
 #            if count > 1 :
 #                tmp.append(key)
 
-        p = Progress("Clustering", len(self.samples))
-        p.start()
+#        p = Progress("Clustering", len(self.samples))
+#        p.start()
 
         # print out samples
-        for sample in self.samples :
-            sample.simple_cluster(0.97)
-#            sample.print_sample_raw(tmp)
-            p.increment()
+#        for sample in self.samples :
+#            sample.simple_cluster(0.97)
+            #sample.print_sample_raw(tmp)
+#            p.increment()
 
-        p.end()
+#        p.end()
+
+        for sample in self.samples :
+            sample.detect_chimeras()
+            #sample.print_sample_raw()
+            sample.simple_cluster(0.97)
 
         self.seqdb.print_database(self.temp_directory + os.sep + "database.fasta")
 

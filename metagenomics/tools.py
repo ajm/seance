@@ -165,3 +165,42 @@ class Aligner1D(object) :
 
         return FastqFile(outf.name)
 
+class Uchime(ExternalProgram) :
+    def __init__(self) :
+        super(Uchime, self).__init__('uchime')
+        self.command = "uchime --input %s --uchimeout %s"
+
+    def __parse(self, fname) :
+        tmp = []
+        f = open(fname)
+
+        for line in f :
+            line = line.strip()
+
+            if line == "" :
+                continue
+
+            data = line.split()
+            
+            if data[16] == 'Y' :
+                # data[1] = "seqXXX/ab=YYY"
+                seqid = int(data[1].split('/')[0][3:])
+                tmp.append(seqid)
+
+        f.close()
+
+        return tmp
+
+    def run(self, fname) :
+        out_fname = fname + ".uchime"
+
+        try :
+            self.system(self.command % (fname, out_fname))
+
+        except ExternalProgramError, epe :
+            print >> sys.stderr, "Error: " + str(epe)
+            sys.exit(-1)
+
+        
+        return self.__parse(out_fname)
+

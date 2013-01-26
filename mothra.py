@@ -25,7 +25,7 @@ def get_mandatory_options() :
     return ["datadir", "tempdir", "metadata"]
 
 def get_required_programs() :
-    return ["sff2fastq", "pagan"]
+    return ["sff2fastq", "pagan", "uchime"]
 
 def clean_up() :
     pass
