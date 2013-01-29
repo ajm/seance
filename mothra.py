@@ -18,7 +18,8 @@ def get_default_options() :
             "minimum-quality"   : 20,
             "window-length"     : None,
             "remove-nbases"     : True,
-            "mid-errors"        : 0
+            "mid-errors"        : 0,
+            "mid-length"        : 6
            }
 
 def get_mandatory_options() :
@@ -56,12 +57,13 @@ def usage() :
     -n      --remove-nbases     (default = %s)
     -l      --compressed-length (default = %s)
     -e      --mid-errors        (default = %s)
+    -g      --mid-length        (default = %s)
     -v      --verbose           (default = %s)
     -h      --help
 """ % (sys.argv[0], str(options['datadir']), str(options['tempdir']), 
        str(options['metadata']), str(options['minimum-quality']), str(options['window-length']), 
        str(options['remove-nbases']), str(options['compressed-length']), str(options['mid-errors']), 
-       str(options['verbose']))
+       str(options['mid-length']), str(options['verbose']))
 
 def expect_int(parameter, argument) :
     try :
@@ -78,7 +80,7 @@ def parse_args() :
     try :
         opts,args = getopt.getopt(
                         sys.argv[1:],
-                        "d:t:m:hnq:w:l:e:",
+                        "d:t:m:hnq:w:l:e:g:",
                         [   "help", 
                             "verbose", 
                             "datadir=", 
@@ -88,7 +90,8 @@ def parse_args() :
                             "window-length=", 
                             "remove-nbases", 
                             "compressed-length=",
-                            "mid-errors="
+                            "mid-errors=",
+                            "mid-length"
                         ]
                     )
 
@@ -125,6 +128,9 @@ def parse_args() :
         
         elif o in ('-e', '--mid-errors') :
             options['mid-errors'] = expect_int("mid-errors", a)
+
+        elif o in ('-g', '--mid-length') :
+            options['mid-length'] = expect_int("mid-length", a)
 
         elif o in ('-v', '--verbose') :
             options['verbose'] = True

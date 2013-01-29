@@ -57,8 +57,9 @@ class Sff2Fastq(ExternalProgram) :
         return FastqFile(fastq_fname)
 
 class GetMID(object) :
-    def __init__(self) :
-        self.command = "grep -A1 \"^@\" %s | grep -v \"^[@-]\" | awk '{ print substr($0, 0, 10) }' | sort | uniq -c | sort -g | tail -1 | awk '{ print $2 }'"
+    def __init__(self, length) :
+        self.length = length
+        self.command = "grep -A1 \"^@\" %s | grep -v \"^[@-]\" | awk '{ print substr($0, 0, " + str(self.length) + ") }' | sort | uniq -c | sort -g | tail -1 | awk '{ print $2 }'"
 
     def run(self, fastq_name) :
         status,output = commands.getstatusoutput(self.command % fastq_name)
@@ -67,7 +68,7 @@ class GetMID(object) :
             raise ExternalProgramError("%s: %s", type(self).__name__, output)
 
         output = output.strip()
-        if re.match("[GATC]{10}", output) == None :
+        if re.match("[GATC]{%d}" % self.length, output) == None :
             raise ExternalProgramError("%s: %s does not look like a MID", type(self).__name__, output)
 
         return output

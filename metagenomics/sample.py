@@ -10,17 +10,18 @@ from metagenomics.filters import Filter
 from metagenomics.db import SequenceDB
 
 class Sample(object) :
-    def __init__(self, sff_fname, workingdir, seqdb) :
+    def __init__(self, sff_fname, workingdir, mid_length, seqdb) :
         self.sff = SffFile(sff_fname)
         self.workingdir = workingdir
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
+        self.mid_length = mid_length
         self.db = seqdb
         self.seqcounts = collections.Counter()
         self.chimeras = []
 
     def preprocess(self, filt, compressed_length, mid_errors=1, ignore_first_homopolymer=False) :
 
-        mid = GetMID().run(self.fastq.get_filename())
+        mid = GetMID(self.mid_length).run(self.fastq.get_filename())
 
         self.fastq.open()
 
@@ -83,7 +84,7 @@ class Sample(object) :
 
         for i in range(len(clusters)) :
             for seq in clusters[i] :
-                print >> f, "%s otu=%d %d" % (seq.id, i, self.__hamming_distance(clusters[0][0].sequence, seq.sequence))
+                print >> f, "%s otu=%d %d" % (seq.id, i, self.__hamming_distance(clusters[1][0].sequence, seq.sequence))
                 print >> f, seq.sequence
 
         f.close()
@@ -131,7 +132,7 @@ class Sample(object) :
                (type(self).__name__, self.sff.get_basename(), len(self), len(self.seqcounts), self.__most_numerous_freq())
 
 class NematodeSample(Sample) :
-    def __init__(self, sff_fname, workingdir, seqdb, metadata) :
-        super(NematodeSample, self).__init__(sff_fname, workingdir, seqdb)
+    def __init__(self, sff_fname, workingdir, mid_length, seqdb, metadata) :
+        super(NematodeSample, self).__init__(sff_fname, workingdir, mid_length, seqdb)
         self.metadata = metadata
 

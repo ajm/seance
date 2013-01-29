@@ -27,7 +27,7 @@ class WorkFlow(object) :
         mdr = MetadataReader(self.metadata_file)
         mdr.process()
 
-        return map(lambda x : NematodeSample(x, self.temp_directory, self.seqdb, mdr.get(x)), self.__get_datafiles())
+        return map(lambda x : NematodeSample(x, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(x)), self.__get_datafiles())
 
     def __build_filter(self, phase) :
         mf = MultiFilter()
