@@ -28,11 +28,11 @@ class Sample(object) :
         for seq in self.fastq :
             if filt.accept(seq) :
                 # ensure there are not too many errors in the mid
-                if self.__hamming_distance(mid, seq[:10]) > mid_errors :
+                if self.__hamming_distance(mid, seq[:self.mid_length]) > mid_errors :
                     continue
 
                 # everything else assumes the mid does not exist
-                seq.remove_mid()
+                seq.remove_mid(self.mid_length)
 
                 # if the last character of the mid is the same as the first character
                 # of the read itself, there is a problem as the mid may end in a homopolymer
@@ -84,7 +84,7 @@ class Sample(object) :
 
         for i in range(len(clusters)) :
             for seq in clusters[i] :
-                print >> f, "%s otu=%d %d" % (seq.id, i, self.__hamming_distance(clusters[1][0].sequence, seq.sequence))
+                print >> f, "%s otu=%d" % (seq.id, i) #, self.__hamming_distance(clusters[1][0].sequence, seq.sequence))
                 print >> f, seq.sequence
 
         f.close()

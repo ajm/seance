@@ -59,7 +59,7 @@ class Sff2Fastq(ExternalProgram) :
 class GetMID(object) :
     def __init__(self, length) :
         self.length = length
-        self.command = "grep -A1 \"^@\" %s | grep -v \"^[@-]\" | awk '{ print substr($0, 0, " + str(self.length) + ") }' | sort | uniq -c | sort -g | tail -1 | awk '{ print $2 }'"
+        self.command = "grep -B1 \"^+\" %s | grep -v \"^[+-]\" | awk '{ print substr($0, 0, " + str(self.length) + ") }' | sort | uniq -c | sort -g | tail -1 | awk '{ print $2 }'"
 
     def run(self, fastq_name) :
         status,output = commands.getstatusoutput(self.command % fastq_name)

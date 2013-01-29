@@ -19,7 +19,7 @@ def get_default_options() :
             "window-length"     : None,
             "remove-nbases"     : True,
             "mid-errors"        : 0,
-            "mid-length"        : 6
+            "mid-length"        : 5
            }
 
 def get_mandatory_options() :

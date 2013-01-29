@@ -106,13 +106,13 @@ class Sequence(object) :
             self.qual_str = self.qual_str[tmp:]
             self.qualities = self.qualities[tmp:]
 
-    def remove_mid(self) :
-        self.sequence = self.sequence[10:]
+    def remove_mid(self, mid_length) :
+        self.sequence = self.sequence[mid_length:]
         self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
-            self.qual_str = self.qual_str[10:]
-            self.qualities = self.qualities[10:]
+            self.qual_str = self.qual_str[mid_length:]
+            self.qualities = self.qualities[mid_length:]
 
     # XXX necessary?
     def is_singular(self) :
