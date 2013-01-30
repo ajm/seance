@@ -1,7 +1,6 @@
 import sys
 import os
 import getopt
-import multiprocessing
 import signal
 
 from metagenomics.workflow import WorkFlow
