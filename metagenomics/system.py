@@ -66,7 +66,7 @@ class System(object) :
                 return False
 
         elif not os.path.isdir(dirname) :
-            print >> sys.stderr, "Error: '%s' exists, but is not a directory!" % tmp
+            print >> sys.stderr, "Error: '%s' exists, but is not a directory!" % dirname
             return False
 
         else :

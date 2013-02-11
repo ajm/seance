@@ -169,7 +169,7 @@ class Aligner1D(object) :
 class Uchime(ExternalProgram) :
     def __init__(self) :
         super(Uchime, self).__init__('uchime')
-        self.command = "uchime --input %s --uchimeout %s"
+        self.command = "uchime --input %s --uchimeout %s &> /dev/null"
 
     def __parse(self, fname) :
         tmp = []

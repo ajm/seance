@@ -29,11 +29,9 @@ class WorkFlow(object) :
 
         return map(lambda x : NematodeSample(x, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(x)), self.__get_datafiles())
 
-    def __build_filter(self, phase) :
+    def __build_filter(self) :
         mf = MultiFilter()
 
-        mf.add(MIDHomopolymer(True if phase == 1 else False))
-        
         if self.options['remove-nbases'] :
             mf.add(AmbiguousFilter())
 
@@ -48,54 +46,34 @@ class WorkFlow(object) :
         return mf
 
     def run(self) :
-        # two passes over all the samples
-        # first : ignore reads where a homopolymer from the mid appears to bleed into the rest of the read
-        # seconds : handle ignored reads
-        for phase,ignore_first in [(1, False), (2, True)] :
-            mf = self.__build_filter(phase)
+        mf = self.__build_filter()
 
-            p = Progress("Reading samples (pass %d)" % phase, len(self.samples))
-            p.start()
+        p = Progress("Reading", len(self.samples))
+        p.start()
 
-            for sample in self.samples :
-                sample.preprocess(mf, 
-                        self.options['compressed-length'], 
-                        mid_errors=self.options['mid-errors'], 
-                        ignore_first_homopolymer=ignore_first)
-                p.increment()
+        # read in all samples and perform basic quality filtering
+        for sample in self.samples :
+            sample.preprocess(mf, self.options['compressed-length'], mid_errors=self.options['mid-errors'])
+            p.increment()
 
-            p.end()
+        p.end()
 
         # get canonical sequences
         self.seqdb.finalise()
 
-        # get ids from each sample
-#        ids = collections.Counter()
-#        for sample in self.samples :
-#            for key in sample.seqcounts.keys() :
-#                ids[key] += 1
-#        
-#        tmp = []
-#        for key,count in ids.items() :
-#            if count > 1 :
-#                tmp.append(key)
-
-#        p = Progress("Clustering", len(self.samples))
-#        p.start()
-
-        # print out samples
-#        for sample in self.samples :
-#            sample.simple_cluster(0.97)
-            #sample.print_sample_raw(tmp)
-#            p.increment()
-
-#        p.end()
-
+        p = Progress("Chimeras", len(self.samples))
+        p.start()
+        
+        # chimera detection + clustering based on multiple alignment
         for sample in self.samples :
-            sample.detect_chimeras()
-            #sample.print_sample_raw()
-            sample.simple_cluster(0.97)
+            if len(sample) != 0 :
+                sample.detect_chimeras()
+                sample.simple_cluster(0.97)
+            p.increment()
 
+        p.end()
+
+        # see everything in the database
         self.seqdb.print_database(self.temp_directory + os.sep + "database.fasta")
 
         print >> sys.stderr, "\n" + str(self.seqdb)

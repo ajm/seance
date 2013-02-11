@@ -19,7 +19,7 @@ class Sample(object) :
         self.seqcounts = collections.Counter()
         self.chimeras = []
 
-    def preprocess(self, filt, compressed_length, mid_errors=1, ignore_first_homopolymer=False) :
+    def preprocess(self, filt, compressed_length, mid_errors=0) :
 
         mid = GetMID(self.mid_length).run(self.fastq.get_filename())
 
@@ -33,16 +33,6 @@ class Sample(object) :
 
                 # everything else assumes the mid does not exist
                 seq.remove_mid(self.mid_length)
-
-                # if the last character of the mid is the same as the first character
-                # of the read itself, there is a problem as the mid may end in a homopolymer
-                # error, therefore we do two passes
-                # during the second pass, the first homopolymer can be trimmed iff the resulting
-                # sequence is already in the database, if this sequence is genuine (ie: not starting
-                # with a homopolymer from the mid, then any more will be clustered with it anyway)
-                if ignore_first_homopolymer :
-                    if seq.compressed[1:compressed_length+1] in self.db :
-                        seq.ltrim(seq[0])
 
                 # the database can only handle sequences where the compressed representation of
                 # that sequence are of identical length
@@ -90,7 +80,8 @@ class Sample(object) :
         f.close()
 
     def detect_chimeras(self) :
-        self.chimeras = Uchime().run(self.print_sample_raw(duplicate_label="/ab"))
+        if len(self) != 0 :
+            self.chimeras = Uchime().run(self.print_sample_raw(duplicate_label="/ab"))
 
     def print_sample_raw(self, whitelist=None, duplicate_label=" NumDuplicates") :
         f = open(self.workingdir + os.sep + self.sff.get_basename() + ".sample", 'w')
@@ -115,7 +106,7 @@ class Sample(object) :
             total_length += (freq * len(self.db.get(key).canonical))
             num_seq += freq
 
-        return total_length / num_seq
+        return total_length / num_seq if num_seq != 0 else 0
 
     def __merge(self, fromkey, tokey) :
         self.seqcounts[tokey] += self.seqcounts[fromkey]
