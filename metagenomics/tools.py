@@ -76,15 +76,13 @@ class GetMID(object) :
 class Pagan(ExternalProgram) :
     def __init__(self) :
         super(Pagan, self).__init__('pagan')
-        #self.command = "pagan --use-consensus --consensus-minimum=3 --use-duplicate-weigths --454 --queryfile %s --outfile %s &> /dev/null"
-        #self.command = "pagan --use-consensus --use-duplicate-weigths --homopolymer --pileup-alignment --use-prefix-anchors --no-terminal-edges --queryfile %s --outfile %s &> /dev/null"
-        self.command = "pagan --use-consensus --use-duplicate-weigths --homopolymer --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
 
     def get_454_alignment(self, fasta_fname) :
+        command = "pagan --use-consensus --use-duplicate-weigths --homopolymer --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
         out_fname = fasta_fname + ".out"
 
         try :
-            self.system(self.command % (fasta_fname, out_fname))
+            self.system(command % (fasta_fname, out_fname))
 
         except ExternalProgramError, epe :
             print >> sys.stderr, "Error: " + str(epe)
@@ -92,6 +90,20 @@ class Pagan(ExternalProgram) :
         
         # pagan always adds '.fas'
         return FastqFile(out_fname + ".fas")
+
+    def get_phyla_alignment(self, fasta_fname) :
+        command = "pagan --seqfile %s --outfile %s --raxml-tree --homopolymer &> /dev/null"
+        out_fname = fasta_fname + ".out"
+
+        try :
+            self.system(command % (fasta_fname, out_fname))
+
+        except ExternalProgramError, epe :
+            print >> sys.stderr, "Error: " + str(epe)
+            sys.exit(-1)
+
+        return out_fname + ".fas", out_fname + ".tre"
+
 
 class Aligner1D(object) :
     def __init__(self) :

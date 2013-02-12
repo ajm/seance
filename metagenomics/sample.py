@@ -54,7 +54,7 @@ class Sample(object) :
 
         self.fastq.close()
 
-        self.print_sample_raw(extension=".reconstruct")
+        #self.print_sample_raw(extension=".reconstruct")
 
     def simple_cluster(self, similarity) :
         threshold = math.ceil(self.__average_length() * (1.0 - similarity))

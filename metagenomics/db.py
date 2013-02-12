@@ -2,6 +2,7 @@ import sys
 import operator
 import bisect
 import collections
+import os
 
 from functools import total_ordering
 
@@ -78,7 +79,7 @@ class SequenceDict(object):
 
         for sc in self.db.values() :
             sc.generate_canonical_sequence()
-            sc.write_fasta(".canon")
+            #sc.write_fasta(".canon")
             p.increment()
 
         p.end()
@@ -167,8 +168,9 @@ can use PAGAN to align them together and infer the representative sequence.
             return
 
         # 1. align sequences
-        #aligned = Pagan().get_454_alignment(self.write_fasta())
-        aligned = Aligner1D().get_alignment(self.write_fasta())
+        prealigned = self.write_fasta()
+        #aligned = Pagan().get_454_alignment(prealigned)
+        aligned = Aligner1D().get_alignment(prealigned)
         aligned.open()
 
         chars = {}
@@ -193,6 +195,10 @@ can use PAGAN to align them together and infer the representative sequence.
                 chars[i][seq[i]] += seq.duplicates
 
         aligned.close()
+
+        # 2b. kill intermediate files
+        os.remove(prealigned)
+        os.remove(aligned.name)
 
         # 3. construct canonical sequence
         tmp = ""

@@ -9,6 +9,7 @@ from metagenomics.datatypes import SampleMetadata
 from metagenomics.filters import *
 from metagenomics.db import SequenceDB
 from metagenomics.progress import Progress
+from metagenomics.tools import Pagan
 
 class WorkFlow(object) :
     def __init__(self, options) :
@@ -32,7 +33,7 @@ class WorkFlow(object) :
     def __build_filter(self) :
         mf = MultiFilter()
 
-        if self.options['remove-nbases'] :
+        if not self.options['dont-remove-nbases'] :
             mf.add(AmbiguousFilter())
 
         mf.add(CompressedLengthFilter(self.options['compressed-length']))
@@ -85,11 +86,54 @@ class WorkFlow(object) :
         if len(self.seqdb) == 0 :
             p = Progress("Reconstruct", len(self.samples))
             p.start()
-            
+
             for sample in self.samples :
                 sample.reconstruct()
+                sample.print_sample_raw(extension=".reconstruct")
                 p.increment()
-            
+
             p.end()
 
+        # we want a 'reference' phylogeny against which to do phylogenetic
+        # placement of everything
+        #
+        # user specifies what sequences are included in the reference phylogeny
+        # by two parameters, number of reads + number of samples
+        duplicate_threshold = self.options['phyla-read-threshold']
+        sample_threshold = self.options['phyla-sample-threshold']
+        ref_count = collections.Counter()
+        phy_keys = []
+
+        # first collect keys for all sequences that fit number of reads
+        for sample in self.samples :
+            for key,freq in sample.seqcounts.most_common() :
+                if freq < duplicate_threshold :
+                    break
+
+                ref_count[key] += 1
+
+        # then for these keys see how many samples they occurred in
+        for key,freq in ref_count.most_common() :
+            if freq < sample_threshold :
+                break
+
+            phy_keys.append(key)
+
+        # write files out + align with PAGAN
+        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
+
+        for key in phy_keys :
+            seq = self.seqdb.get(key).canonical
+            print >> f, ">seq%d" % key
+            print >> f, seq.sequence
+
+        f.close()
+
+        # create a reference phylogeny
+        print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
+        alignment,tree = Pagan().get_phyla_alignment(f.name)
+
+        # perform phylogenetic placement of all the reads in a sample
+        # probably best to do this in the Sample class
+        # TODO
 

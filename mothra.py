@@ -9,23 +9,28 @@ from metagenomics.system import System
 
 def get_default_options() :
     return {
-            "datadir"           : None,
-            "tempdir"           : None,
-            "metadata"          : None,
-            "verbose"           : True,
-            "compressed-length" : 300, 
-            "minimum-quality"   : 20,
-            "window-length"     : None,
-            "remove-nbases"     : True,
-            "mid-errors"        : 0,
-            "mid-length"        : 5
+            'datadir'           : None,
+            'tempdir'           : None,
+            'metadata'          : None,
+            
+            'compressed-length' : 300, 
+            'minimum-quality'   : 20,
+            'window-length'     : None,
+            'dont-remove-nbases': False,
+            'mid-errors'        : 0,
+            'mid-length'        : 5,
+
+            'phyla-read-threshold'   : 10,
+            'phyla-sample-threshold' : 2,
+
+            'verbose'           : False
            }
 
 def get_mandatory_options() :
-    return ["datadir", "tempdir", "metadata"]
+    return ['datadir', 'tempdir', 'metadata']
 
 def get_required_programs() :
-    return ["sff2fastq", "pagan", "uchime"]
+    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime']
 
 def clean_up() :
     pass
@@ -34,35 +39,37 @@ def handler_sigterm(signal, frame) :
     clean_up()
     sys.exit(0)
 
-#def usage(progname) :
-    #print >> sys.stderr, "Usage: %s [OPTIONS]" % progname
-    
-    #options = get_default_options()
-
-    #for k in sorted(options) :
-    #    print >> sys.stderr, "\t-%c\t--%s\t(default = %s)" % (k[0], k, options[k])
-
-    #print >> sys.stderr, ""
-
 def usage() :
     options = get_default_options()
 
-    print >> sys.stderr, """Usage: %s [OPTIONS]
-    -d      --datadir           (default = %s)
-    -t      --tempdir           (default = %s)
-    -m      --metadata          (default = %s)
-    -q      --minimum-quality   (default = %s)
-    -w      --window-length     (default = %s)
-    -n      --remove-nbases     (default = %s)
-    -l      --compressed-length (default = %s)
-    -e      --mid-errors        (default = %s)
-    -g      --mid-length        (default = %s)
-    -v      --verbose           (default = %s)
-    -h      --help
-""" % (sys.argv[0], str(options['datadir']), str(options['tempdir']), 
-       str(options['metadata']), str(options['minimum-quality']), str(options['window-length']), 
-       str(options['remove-nbases']), str(options['compressed-length']), str(options['mid-errors']), 
-       str(options['mid-length']), str(options['verbose']))
+    print >> sys.stderr, """Usage: %s command [OPTIONS]
+    Mandatory:
+        -d      --datadir   (default = %s)
+        -t      --tempdir   (default = %s)
+        -m      --metadata  (default = %s)
+
+    Preprocess options:
+        -q      --minimum-quality     (default = %s)
+        -w      --window-length       (default = %s)
+        -n      --dont-remove-nbases  (default = %s)
+        -l      --compressed-length   (default = %s)
+        -e      --mid-errors          (default = %s)
+        -g      --mid-length          (default = %s)
+
+    Phylogeny options:
+        -a      --phyla-read-threshold      (default = %s)
+        -b      --phyla-sample-threshold    (default = %s)
+
+    Misc options:
+        -v      --verbose             (default = %s)
+        -h      --help
+""" % (sys.argv[0], 
+       str(options['datadir']),                 str(options['tempdir']), 
+       str(options['metadata']),                str(options['minimum-quality']), 
+       str(options['window-length']),           str(options['dont-remove-nbases']), 
+       str(options['compressed-length']),       str(options['mid-errors']), 
+       str(options['mid-length']),              str(options['phyla-read-threshold']), 
+       str(options['phyla-sample-threshold']),  str(options['verbose']))
 
 def expect_int(parameter, argument) :
     try :
@@ -79,7 +86,7 @@ def parse_args(args) :
     try :
         opts,args = getopt.getopt(
                         args,
-                        "d:t:m:hnq:w:l:e:g:",
+                        "d:t:m:hnq:w:l:e:g:a:b:",
                         [   "help", 
                             "verbose", 
                             "datadir=", 
@@ -90,7 +97,9 @@ def parse_args(args) :
                             "remove-nbases", 
                             "compressed-length=",
                             "mid-errors=",
-                            "mid-length"
+                            "mid-length=",
+                            "phyla-read-threshold=",
+                            "phyla-sample-threshold="
                         ]
                     )
 
@@ -119,8 +128,8 @@ def parse_args(args) :
         elif o in ('-w', '--window-length') :
             options['winquality'] = expect_int("winquality", a)
 
-        elif o in ('-n', '--remove-nbases') :
-            options['remove-nbases'] = True # XXX this can never be false...
+        elif o in ('-n', '--dont-remove-nbases') :
+            options['dont-remove-nbases'] = True
 
         elif o in ('-c', '--compress-length') :
             options['compress-length'] = expect_int("compressed-length", a)
@@ -130,6 +139,12 @@ def parse_args(args) :
 
         elif o in ('-g', '--mid-length') :
             options['mid-length'] = expect_int("mid-length", a)
+
+        elif o in ('-a', '--phyla-read-threshold') :
+            options['phyla-read-threshold'] = expect_int("phyla-read-threshold", a)
+
+        elif o in ('-b', '--phyla-sample-threshold') :
+            options['phyla-sample-threshold'] = expect_int("phyla-sample-threshold", a)
 
         elif o in ('-v', '--verbose') :
             options['verbose'] = True
@@ -157,22 +172,22 @@ def main() :
 
     if len(sys.argv) < 2 :
         usage()
-        sys.exit(-1)
+        return -1
 
     command = sys.argv[1]
-    if command not in ["all", "summary", "preprocess", "phylogeny"] :
+    if command not in ['all', 'summary', 'preprocess', 'phylogeny'] :
         print >> sys.stderr, "Error: unknown command '%s'" % command
         usage()
-        sys.exit(-1)
+        return -1
 
     options = parse_args(sys.argv[2:])
 
     if not mandatory_options_set(options) :
-        sys.exit(-1)
+        return -1
 
     if False in [system.check_directories([(options['datadir'], False), (options['tempdir'], True)]), \
                  system.check_file(options['metadata'])] :
-        sys.exit(-1)
+        return -1
 
     System.tempdir(options['tempdir'])
 
@@ -184,6 +199,8 @@ def main() :
     if command == 'phylogeny' or command == 'all' :
         wf.phylogeny()
 
+    return 0
+
 if __name__ == '__main__' :
-    main()
+    sys.exit(main())
 
