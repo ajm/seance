@@ -188,7 +188,7 @@ class FastqFile(DataFile) :
                     self._state = FastqFile.SEQID
                     return self.seq()
 
-        if self._current[FastqFile.SEQID].startswith('>') :
+        if self._current[FastqFile.SEQID] is not None and self._current[FastqFile.SEQID].startswith('>') :
             tmp = self.seq()
             self._current[FastqFile.SEQID] = ""
             return tmp
