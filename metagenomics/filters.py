@@ -50,7 +50,8 @@ class CompressedLengthFilter(LengthFilter) :
         super(CompressedLengthFilter, self).__init__(length+11) 
         # XXX +11 for worst-case scenario: no runs of characters in the mid tag, 
         # but last character in the mid is wrongly extended
-    
+        # XXX this might be nonsense, esp. as mid is not necessarily 10...
+
     def accept(self, seq) :
         if len(seq.compressed) < self.length :
             return False

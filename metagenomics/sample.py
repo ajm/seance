@@ -13,13 +13,14 @@ class Sample(object) :
     def __init__(self, sff_fname, workingdir, mid_length, seqdb) :
         self.sff = SffFile(sff_fname)
         self.workingdir = workingdir
-        self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
+        self.fastq = None #Sff2Fastq().run(self.sff, self.workingdir)
         self.mid_length = mid_length
         self.db = seqdb
         self.seqcounts = collections.Counter()
         self.chimeras = []
 
     def preprocess(self, filt, compressed_length, mid_errors=0) :
+        self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
 
         mid = GetMID(self.mid_length).run(self.fastq.get_filename())
 
@@ -41,6 +42,19 @@ class Sample(object) :
                 self.seqcounts[self.db.put(seq)] += 1
 
         self.fastq.close()
+
+    def reconstruct(self) :
+        self.fastq = FastqFile(os.path.join(self.workingdir, self.sff.get_basename() + ".sample"))
+        self.fastq.open()
+
+        for seq in self.fastq :
+            key = self.db.put(seq)
+            self.seqcounts[key] += seq.duplicates
+            self.db.get(key).generate_canonical_sequence() # all read in sequences are already canonical
+
+        self.fastq.close()
+
+        self.print_sample_raw(extension=".reconstruct")
 
     def simple_cluster(self, similarity) :
         threshold = math.ceil(self.__average_length() * (1.0 - similarity))
@@ -83,8 +97,8 @@ class Sample(object) :
         if len(self) != 0 :
             self.chimeras = Uchime().run(self.print_sample_raw(duplicate_label="/ab"))
 
-    def print_sample_raw(self, whitelist=None, duplicate_label=" NumDuplicates") :
-        f = open(self.workingdir + os.sep + self.sff.get_basename() + ".sample", 'w')
+    def print_sample_raw(self, whitelist=None, duplicate_label=" NumDuplicates", extension=".sample") :
+        f = open(self.workingdir + os.sep + self.sff.get_basename() + extension, 'w')
 
         for key,freq in self.seqcounts.most_common() :
             if ((whitelist is None) or (key in whitelist)) and (key not in self.chimeras) :

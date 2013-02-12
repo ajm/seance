@@ -45,7 +45,7 @@ class WorkFlow(object) :
 
         return mf
 
-    def run(self) :
+    def preprocess(self) :
         mf = self.__build_filter()
 
         p = Progress("Reading", len(self.samples))
@@ -69,6 +69,9 @@ class WorkFlow(object) :
             if len(sample) != 0 :
                 sample.detect_chimeras()
                 sample.simple_cluster(0.97)
+            else :
+                sample.print_sample_raw()
+
             p.increment()
 
         p.end()
@@ -77,4 +80,16 @@ class WorkFlow(object) :
         self.seqdb.print_database(self.temp_directory + os.sep + "database.fasta")
 
         print >> sys.stderr, "\n" + str(self.seqdb)
+
+    def phylogeny(self) :
+        if len(self.seqdb) == 0 :
+            p = Progress("Reconstruct", len(self.samples))
+            p.start()
+            
+            for sample in self.samples :
+                sample.reconstruct()
+                p.increment()
+            
+            p.end()
+
 

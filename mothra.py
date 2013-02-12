@@ -9,10 +9,10 @@ from metagenomics.system import System
 
 def get_default_options() :
     return {
-            "datadir"       : None,
-            "tempdir"       : None,
-            "metadata"      : None,
-            "verbose"       : True,
+            "datadir"           : None,
+            "tempdir"           : None,
+            "metadata"          : None,
+            "verbose"           : True,
             "compressed-length" : 300, 
             "minimum-quality"   : 20,
             "window-length"     : None,
@@ -73,12 +73,12 @@ def expect_int(parameter, argument) :
         usage()
         sys.exit(-1)
 
-def parse_args() :
+def parse_args(args) :
     options = get_default_options()
 
     try :
         opts,args = getopt.getopt(
-                        sys.argv[1:],
+                        args,
                         "d:t:m:hnq:w:l:e:g:",
                         [   "help", 
                             "verbose", 
@@ -155,7 +155,17 @@ def main() :
     system = System()
     system.check_local_installation(get_required_programs())
 
-    options = parse_args()
+    if len(sys.argv) < 2 :
+        usage()
+        sys.exit(-1)
+
+    command = sys.argv[1]
+    if command not in ["all", "summary", "preprocess", "phylogeny"] :
+        print >> sys.stderr, "Error: unknown command '%s'" % command
+        usage()
+        sys.exit(-1)
+
+    options = parse_args(sys.argv[2:])
 
     if not mandatory_options_set(options) :
         sys.exit(-1)
@@ -166,8 +176,13 @@ def main() :
 
     System.tempdir(options['tempdir'])
 
+
     wf = WorkFlow(options)
-    wf.run()
+    if command == 'preprocess' or command == 'all' :
+        wf.preprocess()
+
+    if command == 'phylogeny' or command == 'all' :
+        wf.phylogeny()
 
 if __name__ == '__main__' :
     main()
