@@ -196,7 +196,7 @@ can use PAGAN to align them together and infer the representative sequence.
 
         # 3. construct canonical sequence
         tmp = ""
-        for i in range(max(chars.keys())) :
+        for i in range(max(chars.keys())+1) :
             # tmp2 is list of tuples of the form (character, frequency)
             tmp2 = chars[i].most_common()
 
