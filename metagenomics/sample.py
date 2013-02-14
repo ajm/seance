@@ -43,7 +43,7 @@ class Sample(object) :
 
         self.fastq.close()
 
-    def reconstruct(self) :
+    def rebuild(self) :
         self.fastq = FastqFile(os.path.join(self.workingdir, self.sff.get_basename() + ".sample"))
         self.fastq.open()
 
@@ -54,9 +54,10 @@ class Sample(object) :
 
         self.fastq.close()
 
-        #self.print_sample_raw(extension=".reconstruct")
-
     def simple_cluster(self, similarity) :
+        if len(self) == 0 :
+            return
+
         threshold = math.ceil(self.__average_length() * (1.0 - similarity))
         clusters = []
 
@@ -88,14 +89,16 @@ class Sample(object) :
 
         for i in range(len(clusters)) :
             for seq in clusters[i] :
-                print >> f, "%s otu=%d" % (seq.id, i) #, self.__hamming_distance(clusters[1][0].sequence, seq.sequence))
+                print >> f, "%s otu=%d" % (seq.id, i) 
                 print >> f, seq.sequence
 
         f.close()
 
     def detect_chimeras(self) :
-        if len(self) != 0 :
-            self.chimeras = Uchime().run(self.print_sample_raw(duplicate_label="/ab"))
+        if len(self) == 0 :
+            return
+        
+        self.chimeras = Uchime().run(self.print_sample_raw(duplicate_label="/ab"))
 
     def print_sample_raw(self, whitelist=None, duplicate_label=" NumDuplicates", extension=".sample") :
         f = open(self.workingdir + os.sep + self.sff.get_basename() + extension, 'w')

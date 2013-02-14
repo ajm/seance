@@ -23,6 +23,8 @@ def get_default_options() :
             'phyla-read-threshold'   : 10,
             'phyla-sample-threshold' : 2,
 
+            'otu-similarity'    : 0.97,
+
             'verbose'           : False
            }
 
@@ -32,6 +34,9 @@ def get_mandatory_options() :
 def get_required_programs() :
     return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime']
 
+def get_commands() :
+    return ['all', 'preprocess', 'phylogeny', 'otu']
+
 def clean_up() :
     pass
 
@@ -39,10 +44,31 @@ def handler_sigterm(signal, frame) :
     clean_up()
     sys.exit(0)
 
+def bold(s) :
+    return "\033[1m%s\033[0m" % s
+
+def bold_all(l) :
+    return map(bold, l)
+
+def quote(s) :
+    return "'%s'" % s
+
+def quote_all(l) :
+    return map(quote, l)
+
+def list_sentence(l) :
+    if len(l) < 2 :
+        return "".join(l)
+    return "%s and %s" % (', '.join(l[:-1]), l[-1])
+
 def usage() :
     options = get_default_options()
 
     print >> sys.stderr, """Usage: %s command [OPTIONS]
+
+Legal commands are %s (see below for options).
+%s assumes that the following programs are installed: %s.
+    
     Mandatory:
         -d      --datadir   (default = %s)
         -t      --tempdir   (default = %s)
@@ -60,25 +86,37 @@ def usage() :
         -a      --phyla-read-threshold      (default = %s)
         -b      --phyla-sample-threshold    (default = %s)
 
+    OTU options:
+        -o      --otu-similarity      (default = %s)
+
     Misc options:
-        -v      --verbose             (default = %s)
+        -v      --verbose   (default = %s)
         -h      --help
-""" % (sys.argv[0], 
+
+""" % (sys.argv[0],                             list_sentence(quote_all(bold_all(get_commands()))), 
+       sys.argv[0],                             list_sentence(bold_all(get_required_programs())),
        str(options['datadir']),                 str(options['tempdir']), 
        str(options['metadata']),                str(options['minimum-quality']), 
        str(options['window-length']),           str(options['dont-remove-nbases']), 
        str(options['compressed-length']),       str(options['mid-errors']), 
        str(options['mid-length']),              str(options['phyla-read-threshold']), 
-       str(options['phyla-sample-threshold']),  str(options['verbose']))
+       str(options['phyla-sample-threshold']),  str(options['otu-similarity']), 
+       str(options['verbose']))
 
-def expect_int(parameter, argument) :
+def expect_cast(parameter, argument, func) :
     try :
-        return int(argument)
+        return func(argument)
 
     except ValueError, ve :
         print >> sys.stderr, "Problem parsing argument for %s: %s\n" % (parameter, str(ve))
         usage()
         sys.exit(-1)
+
+def expect_int(parameter, argument) :
+    return expect_cast(parameter, argument, int)
+
+def expect_float(parameter, argument) :
+    return expect_cast(parameter, argument, float)
 
 def parse_args(args) :
     options = get_default_options()
@@ -86,7 +124,7 @@ def parse_args(args) :
     try :
         opts,args = getopt.getopt(
                         args,
-                        "d:t:m:hnq:w:l:e:g:a:b:",
+                        "d:t:m:hnq:w:l:e:g:a:b:o:",
                         [   "help", 
                             "verbose", 
                             "datadir=", 
@@ -99,7 +137,8 @@ def parse_args(args) :
                             "mid-errors=",
                             "mid-length=",
                             "phyla-read-threshold=",
-                            "phyla-sample-threshold="
+                            "phyla-sample-threshold=",
+                            "otu-similarity="
                         ]
                     )
 
@@ -146,6 +185,9 @@ def parse_args(args) :
         elif o in ('-b', '--phyla-sample-threshold') :
             options['phyla-sample-threshold'] = expect_int("phyla-sample-threshold", a)
 
+        elif o in ('-o', '--otu-similarity') :
+            options['otu-similarity'] = expect_float("otu-similarity", a)
+
         elif o in ('-v', '--verbose') :
             options['verbose'] = True
 
@@ -175,7 +217,7 @@ def main() :
         return -1
 
     command = sys.argv[1]
-    if command not in ['all', 'summary', 'preprocess', 'phylogeny'] :
+    if command not in get_commands() :
         print >> sys.stderr, "Error: unknown command '%s'" % command
         usage()
         return -1
@@ -193,10 +235,13 @@ def main() :
 
 
     wf = WorkFlow(options)
-    if command == 'preprocess' or command == 'all' :
+    if command in ('preprocess', 'all') :
         wf.preprocess()
 
-    if command == 'phylogeny' or command == 'all' :
+    if command in ('otu', 'all') :
+        wf.otu()
+
+    if command in ('phylogeny', 'all') :
         wf.phylogeny()
 
     return 0

@@ -91,8 +91,8 @@ class Pagan(ExternalProgram) :
         # pagan always adds '.fas'
         return FastqFile(out_fname + ".fas")
 
-    def get_phyla_alignment(self, fasta_fname) :
-        command = "pagan --seqfile %s --outfile %s --raxml-tree --homopolymer &> /dev/null"
+    def phylogenetic_alignment(self, fasta_fname) :
+        command = "pagan --seqfile %s --outfile %s --raxml-tree --homopolymer" # &> /dev/null"
         out_fname = fasta_fname + ".out"
 
         try :
@@ -104,6 +104,19 @@ class Pagan(ExternalProgram) :
 
         return out_fname + ".fas", out_fname + ".tre"
 
+    def phylogenetic_placement(self, ref_alignment, ref_tree, queries) :
+        command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s --fast-placement \
+                 --test-every-node --exhaustive-placement --one-placement-only --homopolymer --xml" #--output-nhx-tree"
+        out_fname = queries + ".placement"
+
+        try :
+            self.system(command % (ref_alignment, ref_tree, queries, out_fname))
+
+        except ExternalProgramError, epe :
+            print >> sys.stderr, "Error: " + str(epe)
+            sys.exit(-1)
+
+        return out_fname + ".fas"
 
 class Aligner1D(object) :
     def __init__(self) :

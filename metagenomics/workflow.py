@@ -46,6 +46,21 @@ class WorkFlow(object) :
 
         return mf
 
+    def __rebuild_database(self) :
+        if len(self.seqdb) != 0 :
+            return
+
+        p = Progress("Rebuild DB", len(self.samples))
+        p.start()
+
+        for sample in self.samples :
+            sample.rebuild()
+            sample.print_sample_raw(extension=".rebuild")
+            
+            p.increment()
+
+        p.end()
+
     def preprocess(self) :
         mf = self.__build_filter()
 
@@ -67,11 +82,8 @@ class WorkFlow(object) :
         
         # chimera detection + clustering based on multiple alignment
         for sample in self.samples :
-            if len(sample) != 0 :
-                sample.detect_chimeras()
-                sample.simple_cluster(0.97)
-            else :
-                sample.print_sample_raw()
+            sample.detect_chimeras()
+            sample.print_sample_raw()
 
             p.increment()
 
@@ -80,19 +92,10 @@ class WorkFlow(object) :
         # see everything in the database
         self.seqdb.print_database(self.temp_directory + os.sep + "database.fasta")
 
-        print >> sys.stderr, "\n" + str(self.seqdb)
+        #print >> sys.stderr, "\n" + str(self.seqdb)
 
     def phylogeny(self) :
-        if len(self.seqdb) == 0 :
-            p = Progress("Reconstruct", len(self.samples))
-            p.start()
-
-            for sample in self.samples :
-                sample.reconstruct()
-                sample.print_sample_raw(extension=".reconstruct")
-                p.increment()
-
-            p.end()
+        self.__rebuild_database()
 
         # we want a 'reference' phylogeny against which to do phylogenetic
         # placement of everything
@@ -131,9 +134,29 @@ class WorkFlow(object) :
 
         # create a reference phylogeny
         print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
-        alignment,tree = Pagan().get_phyla_alignment(f.name)
+        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(f.name)
 
         # perform phylogenetic placement of all the reads in a sample
         # probably best to do this in the Sample class
-        # TODO
+        for sample in self.samples :
+            if len(sample) == 0 :
+                continue
+
+            print "\n\n\nPhylogenetic placement: %d sequences\n\n" % len(sample)
+            queries = os.path.join(self.temp_directory, sample.sff.get_basename() + ".sample")
+            placement = Pagan().phylogenetic_placement(ref_alignment, ref_tree, queries)
+
+        # TODO do something with the result
+
+    def otu(self) :
+        self.__rebuild_database()
+
+        p = Progress("OTU", len(self.samples))
+        p.start()
+
+        for sample in self.samples :
+            sample.simple_cluster(self.options['otu-similarity'])
+            p.increment()
+
+        p.end()
 
