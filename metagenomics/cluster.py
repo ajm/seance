@@ -8,7 +8,7 @@ from metagenomics.progress import Progress
 
 
 class Cluster(object) :
-    def __init__(self, db, similiarity_threshold, copynumber_threshold) :
+    def __init__(self, db, similiarity_threshold, copynumber_threshold=0) :
         self.db = db
         self.similarity_threshold = similiarity_threshold
         self.copynumber_threshold = copynumber_threshold
@@ -81,10 +81,13 @@ class Cluster(object) :
 
         return same / leng
 
-    def create_clusters(self) :
+    def create_clusters(self, keys=None) :
         seqcount = collections.Counter()
 
-        for key in self.db :
+        if keys == None :
+            keys = self.db
+
+        for key in keys :
             seqcount[key] = self.db.get(key).duplicates
 
         p = Progress("OTU", len(seqcount))

@@ -11,6 +11,8 @@ from metagenomics.db import SequenceDB
 from metagenomics.progress import Progress
 from metagenomics.tools import Pagan
 from metagenomics.cluster import Cluster
+from metagenomics.biom import BiomFile
+
 
 class WorkFlow(object) :
     def __init__(self, options) :
@@ -29,7 +31,7 @@ class WorkFlow(object) :
         mdr = MetadataReader(self.metadata_file)
         mdr.process()
 
-        return map(lambda x : NematodeSample(x, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(x)), self.__get_datafiles())
+        return map(lambda x : NematodeSample(x, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(os.path.basename(x))), self.__get_datafiles())
 
     def __build_filter(self) :
         mf = MultiFilter()
@@ -125,11 +127,6 @@ class WorkFlow(object) :
 
         # first collect keys for all sequences that fit number of reads
         for sample in self.samples :
-            #for key,freq in sample.seqcounts.most_common() :
-            #    if freq < duplicate_threshold :
-            #        break
-            #    ref_count[key] += 1
-
             for key in sample.seqcounts :
                 if self.seqdb.get(key).duplicates >= duplicate_threshold :
                     ref_count[key] += 1
@@ -141,9 +138,8 @@ class WorkFlow(object) :
 
             phy_keys.append(key)
 
-        # TODO
-        # BLAST all of these sequences and ensure that all of them have a high identity
-        # with some species or another
+        # TODO BLAST all of these sequences and ensure that all of them have a high identity
+        # with some known species 
 
         # write files out + align with PAGAN
         f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
@@ -225,4 +221,74 @@ class WorkFlow(object) :
 #            p.increment()
 #
 #        p.end()
+    def otu_phylogeny(self) :
+        self.__rebuild_database()
+
+        duplicate_threshold = self.options['phyla-read-threshold']
+        sample_threshold = self.options['phyla-sample-threshold']
+        ref_count = collections.Counter()
+        phy_keys = []
+
+        # first collect keys for all sequences that fit number of reads
+        for sample in self.samples :
+            for key in sample.seqcounts :
+                if self.seqdb.get(key).duplicates >= duplicate_threshold :
+                    ref_count[key] += 1
+
+        # then for these keys see how many samples they occurred in
+        for key,freq in ref_count.most_common() :
+            if freq < sample_threshold :
+                break
+
+            phy_keys.append(key)
+
+        # TODO BLAST all of these sequences and ensure that all of them have a high identity
+        # with some known species 
+
+        # cluster everything
+        c = Cluster(self.seqdb, self.options['otu-similarity'])
+        c.create_clusters(keys=phy_keys)
+
+        # write files out + align with PAGAN
+        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
+
+        for cindex in range(len(c.clusters)) :
+            key = c.clusters[cindex][0] # representative sequence
+            otu_name = "OTU_%d" % cindex
+            #print >> f, ">seq%d" % key
+            print >> f, ">%s" % otu_name
+            print >> f, self.seqdb.get(key).sequence
+
+        f.close()
+
+
+        #print "\n%d / %d unique sequences\n%.2f%% of total data\n" % (len(phy_keys), len(self.seqdb), 100 * sum(map(lambda x : self.seqdb[x].duplicates, phy_keys)) / float(sum(map(lambda x : x.duplicates, self.seqdb.values()))))
+        #sys.exit(-1)
+
+
+        # create a reference phylogeny
+        print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
+        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(f.name)
+
+        # write results
+        b = BiomFile()
+
+        for sindex in range(len(self.samples)) :
+            b.add_sample(self.samples[sindex].sample_desc())
+
+        for cindex in range(len(c.clusters)) :
+            b.add_otu("OTU_%d" % cindex)
+
+        for sindex in range(len(self.samples)) :
+            sample = self.samples[sindex]
+            for cindex in range(len(c.clusters)) :
+                cluster = c.clusters[cindex]
+                count = 0
+                for read in cluster :
+                    if read in sample :
+                        count += sample.seqcounts[read]
+
+                b.add_quantity(cindex, sindex, count)
+
+        b.write_to(os.path.join(self.temp_directory, "otus.biom"))
 

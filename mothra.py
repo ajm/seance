@@ -265,7 +265,7 @@ def main() :
         wf.preprocess()
 
     if command in ('otu', 'all') :
-        wf.otu()
+        wf.otu_phylogeny()
 
     if command in ('phylogeny', 'all') :
         wf.phylogeny()

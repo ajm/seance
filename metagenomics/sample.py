@@ -19,6 +19,9 @@ class Sample(object) :
         self.seqcounts = collections.Counter()
         self.chimeras = []
 
+    def __contains__(self, seqkey) :
+        return seqkey in self.seqcounts
+
     def preprocess(self, filt, compressed_length, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
 
@@ -164,4 +167,7 @@ class NematodeSample(Sample) :
     def __init__(self, sff_fname, workingdir, mid_length, seqdb, metadata) :
         super(NematodeSample, self).__init__(sff_fname, workingdir, mid_length, seqdb)
         self.metadata = metadata
+
+    def sample_desc(self) :
+        return self.metadata.get('file')
 
