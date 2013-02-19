@@ -10,6 +10,7 @@ from metagenomics.filters import *
 from metagenomics.db import SequenceDB
 from metagenomics.progress import Progress
 from metagenomics.tools import Pagan
+from metagenomics.cluster import Cluster
 
 class WorkFlow(object) :
     def __init__(self, options) :
@@ -46,18 +47,33 @@ class WorkFlow(object) :
 
         return mf
 
+    # XXX this rebuilds something akin to the error correcting database
+    #     constructed during the 'preprocess' command, but it is suboptimal
+    #     for anything else
+#    def __rebuild_database(self) :
+#        if len(self.seqdb) != 0 :
+#            return
+#
+#        p = Progress("Rebuild DB", len(self.samples))
+#        p.start()
+#
+#        for sample in self.samples :
+#            sample.rebuild()
+#            sample.print_sample_raw(extension=".rebuild")
+#            
+#            p.increment()
+#
+#        p.end()
+
     def __rebuild_database(self) :
-        if len(self.seqdb) != 0 :
-            return
+        self.seqdb = {}
 
         p = Progress("Rebuild DB", len(self.samples))
         p.start()
 
         for sample in self.samples :
-            sample.rebuild()
-            sample.print_sample_raw(extension=".rebuild")
-            
-            p.increment()
+            sample.rebuild(self.seqdb)
+            sample.print_sample_raw(extension=".rebuild2")
 
         p.end()
 
@@ -109,11 +125,14 @@ class WorkFlow(object) :
 
         # first collect keys for all sequences that fit number of reads
         for sample in self.samples :
-            for key,freq in sample.seqcounts.most_common() :
-                if freq < duplicate_threshold :
-                    break
+            #for key,freq in sample.seqcounts.most_common() :
+            #    if freq < duplicate_threshold :
+            #        break
+            #    ref_count[key] += 1
 
-                ref_count[key] += 1
+            for key in sample.seqcounts :
+                if self.seqdb.get(key).duplicates >= duplicate_threshold :
+                    ref_count[key] += 1
 
         # then for these keys see how many samples they occurred in
         for key,freq in ref_count.most_common() :
@@ -122,15 +141,23 @@ class WorkFlow(object) :
 
             phy_keys.append(key)
 
+        # TODO
+        # BLAST all of these sequences and ensure that all of them have a high identity
+        # with some species or another
+
         # write files out + align with PAGAN
         f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
 
         for key in phy_keys :
-            seq = self.seqdb.get(key).canonical
             print >> f, ">seq%d" % key
-            print >> f, seq.sequence
+            print >> f, self.seqdb.get(key).sequence
 
         f.close()
+
+
+        #print "\n%d / %d unique sequences\n%.2f%% of total data\n" % (len(phy_keys), len(self.seqdb), 100 * sum(map(lambda x : self.seqdb[x].duplicates, phy_keys)) / float(sum(map(lambda x : x.duplicates, self.seqdb.values()))))
+        #sys.exit(-1)
+
 
         # create a reference phylogeny
         print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
@@ -148,15 +175,54 @@ class WorkFlow(object) :
 
         # TODO do something with the result
 
+    def db_phylogenetic_alignment(self, read_threshold) :
+        keys = []
+
+        # find stuff to align
+        for sample in self.samples :
+            for key in sample.seqcounts :
+                if self.seqdb.get(key).duplicates >= read_threshold :
+                    keys.append(key)
+
+        # write out
+        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
+
+        for key in keys :
+            print >> f, ">seq%d" % key
+            print >> f, self.seqdb.get(key).sequence
+
+        f.close()
+
+        # align
+        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(f.name)
+        
+        return ref_alignment, ref_tree
+
     def otu(self) :
         self.__rebuild_database()
 
-        p = Progress("OTU", len(self.samples))
-        p.start()
+        # pair-wise alignments
+        c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['otu-dup-threshold'])
+        c.create_clusters()
 
-        for sample in self.samples :
-            sample.simple_cluster(self.options['otu-similarity'])
-            p.increment()
+        f = open(os.path.join(self.temp_directory, "database.clusters"), 'w')
 
-        p.end()
+        for ci in range(len(c.clusters)) :
+            cluster = c.clusters[ci]
+            for key in cluster :
+                seq = self.seqdb.get(key)
+                print >> f, ">seq%d NumDuplicates=%d otu=%d" % (seq.id, seq.duplicates, ci)
+                print >> f, seq.sequence
+
+        f.close()
+
+        # old way using MSA
+#        p = Progress("OTU", len(self.samples))
+#        p.start()
+#
+#        for sample in self.samples :
+#            sample.simple_cluster(self.options['otu-similarity'])
+#            p.increment()
+#
+#        p.end()
 

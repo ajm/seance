@@ -145,6 +145,13 @@ can use PAGAN to align them together and infer the representative sequence.
         self.sequences = SortedList([seq])
         self.canonical = None
 
+    @property
+    def sequence(self) :
+        if self.canonical :
+            return self.canonical.sequence
+
+        raise SequenceError("no single, canonical sequence has been generated for this cluster")
+
     def merge(self, other) :
         for seq in other.sequences :
             self.sequences.insert(seq)

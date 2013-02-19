@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 from metagenomics.datatypes import Sequence, SampleMetadata, IUPAC
 
 class DataFileError(Exception):
@@ -129,16 +130,23 @@ class FastqFile(DataFile) :
             self._filehandle.close()
 
     def seq(self) :
+        seqid = self._current[FastqFile.SEQID]
         duplicates = 1
+
         if "NumDuplicates" in self._current[FastqFile.SEQID] :
-            data = self._current[FastqFile.SEQID].split()
-            duplicates = int(data[1].split('=')[1])
+            mat = re.match(">seq(\d+)\ NumDuplicates=(\d+)$", self._current[FastqFile.SEQID])
+
+            if not mat :
+                raise DataFileError("'%s' is a malformed sequence id" % self._current[FastqFile.SEQID])
+
+            seqid = int(mat.group(1))
+            duplicates = int(mat.group(2))
 
         tmp = Sequence(self._current[FastqFile.SEQ], 
                 None if self._current[FastqFile.QUAL] == "" else self._current[FastqFile.QUAL])
         
         # hack, maybe make more documented
-        tmp.id = self._current[FastqFile.SEQID]
+        tmp.id = seqid
         tmp.duplicates = duplicates
 
         return tmp

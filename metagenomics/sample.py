@@ -42,15 +42,36 @@ class Sample(object) :
                 self.seqcounts[self.db.put(seq)] += 1
 
         self.fastq.close()
+    
+    # XXX old rebuild
+#    def rebuild(self) :
+#        self.fastq = FastqFile(os.path.join(self.workingdir, self.sff.get_basename() + ".sample"))
+#        self.fastq.open()
+#
+#        for seq in self.fastq :
+#            key = self.db.put(seq)
+#            self.seqcounts[key] += seq.duplicates
+#            self.db.get(key).generate_canonical_sequence() # all read in sequences are already canonical
+#
+#        self.fastq.close()
 
-    def rebuild(self) :
+    def rebuild(self, newdb) :
+        self.db = newdb
+        self.seqcounts.clear()
+
         self.fastq = FastqFile(os.path.join(self.workingdir, self.sff.get_basename() + ".sample"))
         self.fastq.open()
 
         for seq in self.fastq :
-            key = self.db.put(seq)
-            self.seqcounts[key] += seq.duplicates
-            self.db.get(key).generate_canonical_sequence() # all read in sequences are already canonical
+            count = seq.duplicates
+            key = seq.id
+
+            if key not in self.db :
+                self.db[key] = seq
+            else :
+                self.db[key].duplicates += count
+
+            self.seqcounts[key] = count
 
         self.fastq.close()
 
@@ -89,7 +110,7 @@ class Sample(object) :
 
         for i in range(len(clusters)) :
             for seq in clusters[i] :
-                print >> f, "%s otu=%d" % (seq.id, i) 
+                print >> f, ">seq%s NumDuplicates=%d otu=%d" % (seq.id, seq.duplicates, i) 
                 print >> f, seq.sequence
 
         f.close()
@@ -106,7 +127,7 @@ class Sample(object) :
         for key,freq in self.seqcounts.most_common() :
             if ((whitelist is None) or (key in whitelist)) and (key not in self.chimeras) :
                 print >> f, ">seq%d%s=%d" % (key, duplicate_label, freq)
-                print >> f, self.db.get(key).canonical.sequence
+                print >> f, self.db.get(key).sequence
 
         f.close()
 
@@ -120,7 +141,7 @@ class Sample(object) :
         num_seq = 0
 
         for key,freq in self.seqcounts.iteritems() :
-            total_length += (freq * len(self.db.get(key).canonical))
+            total_length += (freq * len(self.db.get(key).sequence))
             num_seq += freq
 
         return total_length / num_seq if num_seq != 0 else 0

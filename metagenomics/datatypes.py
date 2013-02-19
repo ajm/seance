@@ -176,7 +176,7 @@ class Sequence(object) :
 
     def __str__(self) :
         tmp = '@' if self.qual_str else '>'
-        s = "%s%s\n%s\n" % (tmp, "seq", self.sequence)
+        s = "%s%s\n%s\n" % (tmp, ("seq%d" % self.id) if self.id != None else "seq", self.sequence)
         
         if self.qual_str :
             s += ("+\n%s\n" % self.qual_str)

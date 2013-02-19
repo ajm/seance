@@ -15,7 +15,8 @@ class Progress(object) :
         return self.current / self.total
 
     def time(self) :
-        return "%d seconds" % (datetime.datetime.now() - self.start_time).seconds
+        seconds = (datetime.datetime.now() - self.start_time).seconds
+        return "%d second%s" % (seconds, "" if seconds == 1 else "s")
 
     def increment(self) :
         self.current += 1

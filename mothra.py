@@ -24,6 +24,7 @@ def get_default_options() :
             'phyla-sample-threshold' : 2,
 
             'otu-similarity'    : 0.97,
+            'otu-dup-threshold' : 100,
 
             'verbose'           : False
            }
@@ -88,6 +89,7 @@ Legal commands are %s (see below for options).
 
     OTU options:
         -o      --otu-similarity      (default = %s)
+        -x      --otu-dup-threshold   (default = %s)
 
     Misc options:
         -v      --verbose   (default = %s)
@@ -101,7 +103,7 @@ Legal commands are %s (see below for options).
        str(options['compressed-length']),       str(options['mid-errors']), 
        str(options['mid-length']),              str(options['phyla-read-threshold']), 
        str(options['phyla-sample-threshold']),  str(options['otu-similarity']), 
-       str(options['verbose']))
+       str(options['otu-dup-threshold']),       str(options['verbose']))
 
 def expect_cast(parameter, argument, func) :
     try :
@@ -124,7 +126,7 @@ def parse_args(args) :
     try :
         opts,args = getopt.getopt(
                         args,
-                        "d:t:m:hnq:w:l:e:g:a:b:o:",
+                        "d:t:m:hnq:w:l:e:g:a:b:o:x:",
                         [   "help", 
                             "verbose", 
                             "datadir=", 
@@ -138,7 +140,8 @@ def parse_args(args) :
                             "mid-length=",
                             "phyla-read-threshold=",
                             "phyla-sample-threshold=",
-                            "otu-similarity="
+                            "otu-similarity=",
+                            "otu-dup-threshold="
                         ]
                     )
 
@@ -188,11 +191,17 @@ def parse_args(args) :
         elif o in ('-o', '--otu-similarity') :
             options['otu-similarity'] = expect_float("otu-similarity", a)
 
+        elif o in ('-x', '--otu-dup-threshold') :
+            options['otu-dup-threshold'] = expect_int("otu-dup-threshold", a)
+
         elif o in ('-v', '--verbose') :
             options['verbose'] = True
 
         else :
             assert False, "unhandled option %s" % o
+
+
+    check_options(options)
 
     return options
 
@@ -206,11 +215,34 @@ def mandatory_options_set(options) :
     
     return ret
 
+def check_options(options) :
+    system = System()
+
+    if not mandatory_options_set(options) :
+        sys.exit(-1)
+
+    if False in [system.check_directories([(options['datadir'], False), (options['tempdir'], True)]), \
+                 system.check_file(options['metadata'])] :
+        sys.exit(-1)
+
+    if options['phyla-sample-threshold'] <= 0 :
+        print >> sys.stderr, "Error: phyla-sample-threshold must be > 0 (read %d)" % options['phyla-sample-threshold']
+        sys.exit(-1)
+
+    if options['phyla-read-threshold'] <= 0 :
+        print >> sys.stderr, "Error: phyla-read-threshold must be > 0 (read %d)" % options['phyla-read-threshold']
+        sys.exit(-1)
+
+    if options['otu-similarity'] < 0.0 or options['otu-similarity'] > 1.0 :
+        print >> sys.stderr, "Error: otu-similarity must be between 0.0 and 1.0 (read %.2f)" % options['otu-similarity']
+        sys.exit(-1)
+
+    if options['otu-dup-threshold'] <= 0 :
+        print >> sys.stderr, "Error: otu-dup-threshold must be > 0 (read %d)" % options['otu-dup-threshold']
+        sys.exit(-1)
+
 def main() :
     signal.signal(signal.SIGINT, handler_sigterm)
-
-    system = System()
-    system.check_local_installation(get_required_programs())
 
     if len(sys.argv) < 2 :
         usage()
@@ -224,15 +256,9 @@ def main() :
 
     options = parse_args(sys.argv[2:])
 
-    if not mandatory_options_set(options) :
-        return -1
-
-    if False in [system.check_directories([(options['datadir'], False), (options['tempdir'], True)]), \
-                 system.check_file(options['metadata'])] :
-        return -1
-
-    System.tempdir(options['tempdir'])
-
+    system = System()
+    system.check_local_installation(get_required_programs())
+    System.tempdir(options['tempdir']) # some objects need this set
 
     wf = WorkFlow(options)
     if command in ('preprocess', 'all') :

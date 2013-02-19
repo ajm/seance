@@ -171,7 +171,7 @@ class Aligner1D(object) :
 
         s = ""
         for i in range(len(self.charfreqs)) :
-            s += ("%s\n" % self.sequences[i].id)
+            s += (">seq%s\n" % self.sequences[i].id)
             tmp = self.charfreqs[i]
             for pos in range(len(self.maxlens)) :
                 try :
