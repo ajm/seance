@@ -3,6 +3,7 @@ import abc
 import os
 import commands
 import re
+import urllib2
 
 from metagenomics.filetypes import SffFile, FastqFile
 
@@ -229,4 +230,35 @@ class Uchime(ExternalProgram) :
 
         
         return self.__parse(out_fname)
+
+class BlastN(ExternalProgram) :
+    def __init__(self) :
+        super(BlastN, self).__init__('blastn')
+        self.command = "blastn -query %s -db nr -remote -num_alignments 10 -outfmt 10"
+        self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta"
+
+    def __get_complete_desc(self, name) :
+        f = urllib2.urlopen(self.url % name)
+        return '_'.join(f.readline().split('|')[-1].strip().split()[:2]).replace('.', '') # ;-P
+
+    def get_names(self, fasta_fname) :
+        s,o = commands.getstatusoutput(self.command % fasta_fname)
+        
+        if s != 0 :
+            raise ExternalProgramError("blastn returned %d" % s)
+
+        names = {}
+
+        for line in o.split('\n') :
+            fields = line.split(',')
+            
+            # only accept the first one
+            if fields[0] in names :
+                continue
+            
+            desc = fields[1].split('|')
+            if re.match(".+\.\d+", desc[3]) :
+                names[fields[0]] = "%s_%s_%s" % (fields[0], self.__get_complete_desc(desc[3]), fields[2])
+
+        return names
 

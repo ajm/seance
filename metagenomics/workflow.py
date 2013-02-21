@@ -9,7 +9,7 @@ from metagenomics.datatypes import SampleMetadata
 from metagenomics.filters import *
 from metagenomics.db import SequenceDB
 from metagenomics.progress import Progress
-from metagenomics.tools import Pagan
+from metagenomics.tools import Pagan, BlastN
 from metagenomics.cluster import Cluster
 from metagenomics.biom import BiomFile
 
@@ -256,11 +256,29 @@ class WorkFlow(object) :
             key = c.clusters[cindex][0] # representative sequence
             otu_name = "OTU_%d" % cindex
             #print >> f, ">seq%d" % key
-            print >> f, ">%s" % otu_name
+            print >> f, ">%s" % str(cindex)
             print >> f, self.seqdb.get(key).sequence
 
         f.close()
 
+
+        print "Running blastn to get OTU names..."
+        otu_names = BlastN().get_names(f.name)
+
+
+        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
+
+        for cindex in range(len(c.clusters)) :
+            key = c.clusters[cindex][0] # representative sequence
+            otu_name = "OTU_%d" % cindex
+            #print >> f, ">seq%d" % key
+            print >> f, ">%s" % otu_names.get(str(cindex), "%d_unknown" % cindex)
+            print >> f, self.seqdb.get(key).sequence
+
+        f.close()
+
+
+        
 
         #print "\n%d / %d unique sequences\n%.2f%% of total data\n" % (len(phy_keys), len(self.seqdb), 100 * sum(map(lambda x : self.seqdb[x].duplicates, phy_keys)) / float(sum(map(lambda x : x.duplicates, self.seqdb.values()))))
         #sys.exit(-1)
@@ -270,6 +288,7 @@ class WorkFlow(object) :
         print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
         ref_alignment,ref_tree = Pagan().phylogenetic_alignment(f.name)
 
+
         # write results
         b = BiomFile()
 
@@ -277,7 +296,8 @@ class WorkFlow(object) :
             b.add_sample(self.samples[sindex].sample_desc())
 
         for cindex in range(len(c.clusters)) :
-            b.add_otu("OTU_%d" % cindex)
+            otu_name = "OTU_%d" % cindex
+            b.add_otu(otu_names.get(str(cindex), "%d_unknown" % cindex))
 
         for sindex in range(len(self.samples)) :
             sample = self.samples[sindex]
