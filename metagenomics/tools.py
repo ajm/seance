@@ -258,7 +258,13 @@ class BlastN(ExternalProgram) :
             
             desc = fields[1].split('|')
             if re.match(".+\.\d+", desc[3]) :
-                names[fields[0]] = "%s_%s_%s" % (fields[0], self.__get_complete_desc(desc[3]), fields[2])
+                try :
+                    key = int(fields[0])
+
+                except ValueError, ve :
+                    continue
+
+                names[key] = "%s_%s_%s" % (fields[0], self.__get_complete_desc(desc[3]), fields[2])
 
         return names
 

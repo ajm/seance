@@ -33,7 +33,7 @@ def get_mandatory_options() :
     return ['datadir', 'tempdir', 'metadata']
 
 def get_required_programs() :
-    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime']
+    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime', 'blastn']
 
 def get_commands() :
     return ['all', 'preprocess', 'phylogeny', 'otu']

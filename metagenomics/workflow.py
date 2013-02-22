@@ -4,7 +4,7 @@ import glob
 import collections
 
 from metagenomics.sample import NematodeSample
-from metagenomics.filetypes import MetadataReader
+from metagenomics.filetypes import MetadataReader, DataFileError
 from metagenomics.datatypes import SampleMetadata
 from metagenomics.filters import *
 from metagenomics.db import SequenceDB
@@ -49,24 +49,6 @@ class WorkFlow(object) :
 
         return mf
 
-    # XXX this rebuilds something akin to the error correcting database
-    #     constructed during the 'preprocess' command, but it is suboptimal
-    #     for anything else
-#    def __rebuild_database(self) :
-#        if len(self.seqdb) != 0 :
-#            return
-#
-#        p = Progress("Rebuild DB", len(self.samples))
-#        p.start()
-#
-#        for sample in self.samples :
-#            sample.rebuild()
-#            sample.print_sample_raw(extension=".rebuild")
-#            
-#            p.increment()
-#
-#        p.end()
-
     def __rebuild_database(self) :
         self.seqdb = {}
 
@@ -74,7 +56,13 @@ class WorkFlow(object) :
         p.start()
 
         for sample in self.samples :
-            sample.rebuild(self.seqdb)
+            try :
+                sample.rebuild(self.seqdb)
+
+            except DataFileError, dfe :
+                print "\rError: %s\nHave all the samples been preprocessed?" % str(dfe)
+                sys.exit(-1)
+
             sample.print_sample_raw(extension=".rebuild2")
 
         p.end()
@@ -112,16 +100,7 @@ class WorkFlow(object) :
 
         #print >> sys.stderr, "\n" + str(self.seqdb)
 
-    def phylogeny(self) :
-        self.__rebuild_database()
-
-        # we want a 'reference' phylogeny against which to do phylogenetic
-        # placement of everything
-        #
-        # user specifies what sequences are included in the reference phylogeny
-        # by two parameters, number of reads + number of samples
-        duplicate_threshold = self.options['phyla-read-threshold']
-        sample_threshold = self.options['phyla-sample-threshold']
+    def __get_important_keys(self, duplicate_threshold, sample_threshold) :
         ref_count = collections.Counter()
         phy_keys = []
 
@@ -138,26 +117,32 @@ class WorkFlow(object) :
 
             phy_keys.append(key)
 
-        # TODO BLAST all of these sequences and ensure that all of them have a high identity
-        # with some known species 
+        return phy_keys
+    
+    def __write_fasta(self, keys, filename, names=None) :
+        f = open(os.path.join(self.temp_directory, filename), 'w')
 
-        # write files out + align with PAGAN
-        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
+        for key in keys :
+            if names is None :
+                print >> f, ">%d" % key
+            else :
+                print >> f, ">%s" % names.get(key, "%d_unknown" % key)
 
-        for key in phy_keys :
-            print >> f, ">seq%d" % key
             print >> f, self.seqdb.get(key).sequence
 
         f.close()
 
+        return f.name
 
-        #print "\n%d / %d unique sequences\n%.2f%% of total data\n" % (len(phy_keys), len(self.seqdb), 100 * sum(map(lambda x : self.seqdb[x].duplicates, phy_keys)) / float(sum(map(lambda x : x.duplicates, self.seqdb.values()))))
-        #sys.exit(-1)
+    def phylogeny(self) :
+        self.__rebuild_database()
 
+        phy_keys = self.__get_important_keys(self.options['phyla-read-threshold'], self.options['phyla-sample-threshold'])
+        phy_fasta = self.__write_fasta(phy_keys, "reference_phyla.fasta")
 
         # create a reference phylogeny
         print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
-        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(f.name)
+        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
 
         # perform phylogenetic placement of all the reads in a sample
         # probably best to do this in the Sample class
@@ -169,35 +154,9 @@ class WorkFlow(object) :
             queries = os.path.join(self.temp_directory, sample.sff.get_basename() + ".sample")
             placement = Pagan().phylogenetic_placement(ref_alignment, ref_tree, queries)
 
-        # TODO do something with the result
-
-    def db_phylogenetic_alignment(self, read_threshold) :
-        keys = []
-
-        # find stuff to align
-        for sample in self.samples :
-            for key in sample.seqcounts :
-                if self.seqdb.get(key).duplicates >= read_threshold :
-                    keys.append(key)
-
-        # write out
-        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
-
-        for key in keys :
-            print >> f, ">seq%d" % key
-            print >> f, self.seqdb.get(key).sequence
-
-        f.close()
-
-        # align
-        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(f.name)
-        
-        return ref_alignment, ref_tree
-
     def otu(self) :
         self.__rebuild_database()
 
-        # pair-wise alignments
         c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['otu-dup-threshold'])
         c.create_clusters()
 
@@ -212,92 +171,37 @@ class WorkFlow(object) :
 
         f.close()
 
-        # old way using MSA
-#        p = Progress("OTU", len(self.samples))
-#        p.start()
-#
-#        for sample in self.samples :
-#            sample.simple_cluster(self.options['otu-similarity'])
-#            p.increment()
-#
-#        p.end()
     def otu_phylogeny(self) :
         self.__rebuild_database()
 
-        duplicate_threshold = self.options['phyla-read-threshold']
-        sample_threshold = self.options['phyla-sample-threshold']
-        ref_count = collections.Counter()
-        phy_keys = []
-
-        # first collect keys for all sequences that fit number of reads
-        for sample in self.samples :
-            for key in sample.seqcounts :
-                if self.seqdb.get(key).duplicates >= duplicate_threshold :
-                    ref_count[key] += 1
-
-        # then for these keys see how many samples they occurred in
-        for key,freq in ref_count.most_common() :
-            if freq < sample_threshold :
-                break
-
-            phy_keys.append(key)
-
-        # TODO BLAST all of these sequences and ensure that all of them have a high identity
-        # with some known species 
+        phy_keys = self.__get_important_keys(self.options['phyla-read-threshold'], self.options['phyla-sample-threshold'])
 
         # cluster everything
         c = Cluster(self.seqdb, self.options['otu-similarity'])
         c.create_clusters(keys=phy_keys)
 
-        # write files out + align with PAGAN
-        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
+        clust_keys = map(lambda x : x[0], c.clusters)
+        phy_fasta = self.__write_fasta(clust_keys, "reference_phyla.fasta")
 
-        for cindex in range(len(c.clusters)) :
-            key = c.clusters[cindex][0] # representative sequence
-            otu_name = "OTU_%d" % cindex
-            #print >> f, ">seq%d" % key
-            print >> f, ">%s" % str(cindex)
-            print >> f, self.seqdb.get(key).sequence
-
-        f.close()
-
-
+        # blast to get better names
         print "Running blastn to get OTU names..."
-        otu_names = BlastN().get_names(f.name)
+        otu_names = BlastN().get_names(phy_fasta)
 
-
-        f = open(os.path.join(self.temp_directory, "reference_phyla.fasta"), 'w')
-
-        for cindex in range(len(c.clusters)) :
-            key = c.clusters[cindex][0] # representative sequence
-            otu_name = "OTU_%d" % cindex
-            #print >> f, ">seq%d" % key
-            print >> f, ">%s" % otu_names.get(str(cindex), "%d_unknown" % cindex)
-            print >> f, self.seqdb.get(key).sequence
-
-        f.close()
-
-
-        
-
-        #print "\n%d / %d unique sequences\n%.2f%% of total data\n" % (len(phy_keys), len(self.seqdb), 100 * sum(map(lambda x : self.seqdb[x].duplicates, phy_keys)) / float(sum(map(lambda x : x.duplicates, self.seqdb.values()))))
-        #sys.exit(-1)
-
+        phy_fasta = self.__write_fasta(clust_keys, "reference_phyla.fasta", otu_names)
 
         # create a reference phylogeny
         print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
-        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(f.name)
+        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
 
 
         # write results
         b = BiomFile()
 
-        for sindex in range(len(self.samples)) :
-            b.add_sample(self.samples[sindex].sample_desc())
+        for sample in self.samples :
+            b.add_sample(sample.sample_desc())
 
-        for cindex in range(len(c.clusters)) :
-            otu_name = "OTU_%d" % cindex
-            b.add_otu(otu_names.get(str(cindex), "%d_unknown" % cindex))
+        for key in clust_keys :
+            b.add_otu(otu_names.get(key, "%d_unknown" % key))
 
         for sindex in range(len(self.samples)) :
             sample = self.samples[sindex]
@@ -310,5 +214,5 @@ class WorkFlow(object) :
 
                 b.add_quantity(cindex, sindex, count)
 
-        b.write_to(os.path.join(self.temp_directory, "otus.biom"))
+        b.write_to(os.path.join(self.temp_directory, "reference_phyla.biom"))
 
