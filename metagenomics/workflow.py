@@ -198,7 +198,7 @@ class WorkFlow(object) :
         b = BiomFile()
 
         for sample in self.samples :
-            b.add_sample(sample.sample_desc())
+            b.add_sample(sample.sample_desc(), sample.metadata)
 
         for key in clust_keys :
             b.add_otu(otu_names.get(key, "%d_unknown" % key))

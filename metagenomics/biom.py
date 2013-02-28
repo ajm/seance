@@ -4,11 +4,14 @@ import datetime
 class BiomFile(object) :
     def __init__(self) :
         self.samples = []
+        self.metadata = {}
         self.otus = []
         self.data = []
 
-    def add_sample(self, sample_name) :
+    def add_sample(self, sample_name, sample_metadata=None) :
         self.samples.append(sample_name)
+        if sample_metadata :
+            self.metadata[sample_name] = sample_metadata
 
     def add_otu(self, otu_name) :
         self.otus.append(otu_name)
@@ -16,6 +19,17 @@ class BiomFile(object) :
     def add_quantity(self, otuid, sampleid, value) :
         if value > 0 :
             self.data.append((otuid, sampleid, value))
+
+    def sample_metadata(self, sample_name) :
+        if sample_name not in self.metadata :
+            return "null"
+        tmp = {}
+        md = self.metadata[sample_name]
+        tmp["Date"] = md.get("date")
+        tmp["Lemur"] = md.get("lemur")
+        tmp["Location"] = md.get("location")
+        tmp["Eggs"] = str(md.get("eggs"))
+        return "{ " + ", ".join(map(lambda x: "%s : %s" % (repr(x[0]).replace("'","\""), repr(x[1]).replace("'","\"")), tmp.items())) + " }"
 
     def write_to(self, filename) :
         f = open(filename, 'w')
@@ -39,7 +53,7 @@ class BiomFile(object) :
         
         print >> f, '\t"columns":['
         for i in self.samples :
-            print >> f, "\t\t{ \"id\":\"%s\", \"metadata\":null }%s" % (i, "," if i != self.samples[-1] else "")
+            print >> f, "\t\t{ \"id\":\"%s\", \"metadata\": %s }%s" % (i, self.sample_metadata(i), "," if i != self.samples[-1] else "")
         print >> f, '\t],'
 
         print >> f, '\t"matrix_type": "sparse",'

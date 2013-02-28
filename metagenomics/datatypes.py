@@ -193,6 +193,9 @@ class SampleMetadata(object) :
     def get(self, key) :
         return self.data[key]
 
+    def items(self) :
+        return self.data.items()
+
     def __str__(self) :
         s = "Metadata: "
 

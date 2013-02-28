@@ -238,8 +238,13 @@ class BlastN(ExternalProgram) :
         self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta"
 
     def __get_complete_desc(self, name) :
-        f = urllib2.urlopen(self.url % name)
-        return '_'.join(f.readline().split('|')[-1].strip().split()[:2]).replace('.', '') # ;-P
+        try :
+            f = urllib2.urlopen(self.url % name)
+            return '_'.join(f.readline().split('|')[-1].strip().split()[:2]).replace('.', '') # ;-P
+        except urllib2.HTTPError, he :
+            print >> sys.stderr, "Error: could not communicate with eutils.ncbi.nlm.nih.gov for %s : %s" % (name, str(he))
+            #sys.exit(-1)
+            return name
 
     def get_names(self, fasta_fname) :
         s,o = commands.getstatusoutput(self.command % fasta_fname)
