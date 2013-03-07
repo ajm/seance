@@ -162,7 +162,8 @@ class FastqFile(DataFile) :
 
             # both '@' and '>' are legitimate quality scores
             # but '+' is a genuine delimiter
-            if line.startswith('+') :
+            # edit: unfortunately so is '+', so i also need to be in the SEQ state
+            if line.startswith('+') and (self._state == FastqFile.SEQ) :
                 self._current[FastqFile.QUALID] = line
                 self._state = FastqFile.QUAL
                 continue
@@ -186,6 +187,8 @@ class FastqFile(DataFile) :
                     return tmp
 
                 self._current[FastqFile.SEQ] += line
+                # note: sequence can be across an arbitrary number of lines, so we have
+                # to stay in state SEQ 
 
             elif self._state == FastqFile.QUAL :
                 self.__validate(line, self._state)

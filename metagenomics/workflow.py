@@ -98,7 +98,7 @@ class WorkFlow(object) :
         # see everything in the database
         self.seqdb.print_database(self.temp_directory + os.sep + "database.fasta")
 
-        #print >> sys.stderr, "\n" + str(self.seqdb)
+        print >> sys.stderr, "\n" + str(self.seqdb)
 
     def __get_important_keys(self, duplicate_threshold, sample_threshold) :
         ref_count = collections.Counter()

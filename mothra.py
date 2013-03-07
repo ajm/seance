@@ -14,13 +14,13 @@ def get_default_options() :
             'metadata'          : None,
             
             'compressed-length' : 300, 
-            'minimum-quality'   : 20,
+            'minimum-quality'   : 25,
             'window-length'     : None,
             'dont-remove-nbases': False,
             'mid-errors'        : 0,
             'mid-length'        : 5,
 
-            'phyla-read-threshold'   : 10,
+            'phyla-read-threshold'   : 2,
             'phyla-sample-threshold' : 2,
 
             'otu-similarity'    : 0.97,
