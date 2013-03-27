@@ -23,6 +23,7 @@ class WorkFlow(object) :
         self.seqdb = SequenceDB()
 
         self.samples = self.__create_samples()
+        self.samples.sort()
 
     def __get_datafiles(self) :
         return glob.glob(self.data_directory + os.sep + "*sff")

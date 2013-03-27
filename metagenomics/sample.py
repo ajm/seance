@@ -4,6 +4,8 @@ import os
 import copy
 import math
 
+from functools import total_ordering
+
 from metagenomics.filetypes import SffFile, FastqFile
 from metagenomics.tools import Sff2Fastq, GetMID, Pagan, Uchime
 from metagenomics.filters import Filter
@@ -163,6 +165,7 @@ class Sample(object) :
         return "%s: %s (#seq=%d unique=%d mostfreq = %d)" % \
                (type(self).__name__, self.sff.get_basename(), len(self), len(self.seqcounts), self.__most_numerous_freq())
 
+@total_ordering
 class NematodeSample(Sample) :
     def __init__(self, sff_fname, workingdir, mid_length, seqdb, metadata) :
         super(NematodeSample, self).__init__(sff_fname, workingdir, mid_length, seqdb)
@@ -170,4 +173,12 @@ class NematodeSample(Sample) :
 
     def sample_desc(self) :
         return self.metadata.get('file')
+
+    def __eq__(self, other) :
+        return (self.metadata.get('location'), self.metadata.get('lemur'), self.metadata.get('date')) == \
+                (other.metadata.get('location'), other.metadata.get('lemur'), other.metadata.get('date'))
+
+    def __lt__(self, other) :
+        return (self.metadata.get('location'), self.metadata.get('lemur'), self.metadata.get('date')) < \
+                (other.metadata.get('location'), other.metadata.get('lemur'), other.metadata.get('date'))
 

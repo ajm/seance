@@ -1,6 +1,8 @@
 import sys
 import os
 import re
+import datetime
+
 from metagenomics.datatypes import Sequence, SampleMetadata, IUPAC
 
 class DataFileError(Exception):
@@ -237,7 +239,7 @@ class MetadataReader(object) :
             # Tg_2 53 Tg_2-25062012-1 Solofo 10/11/2010 Campsite 9
             filename = data[2] + ".sff"
             lemurname = data[3]
-            date = data[4]
+            date = self.make_date(data[4])
             location = data[5]
             try :
                 num_eggs = int(data[6])
@@ -260,3 +262,11 @@ class MetadataReader(object) :
             
         f.close()
 
+    def make_date(self, s) :
+        try :
+            day,month,year = map(int, s.split('/'))
+
+        except :
+            return datetime.date(1970, 1, 1) # XXX or sys.exit ?
+
+        return datetime.date(year, month, day)

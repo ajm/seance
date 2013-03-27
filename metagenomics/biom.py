@@ -25,7 +25,7 @@ class BiomFile(object) :
             return "null"
         tmp = {}
         md = self.metadata[sample_name]
-        tmp["Date"] = md.get("date")
+        tmp["Date"] = str(md.get("date"))
         tmp["Lemur"] = md.get("lemur")
         tmp["Location"] = md.get("location")
         tmp["Eggs"] = str(md.get("eggs"))
