@@ -273,3 +273,52 @@ class BlastN(ExternalProgram) :
 
         return names
 
+class PyroNoise(ExternalProgram) :
+    def __init__(self) :
+        super(PyroNoise, self).__init__('PyroNoise')
+        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0)\" &> /dev/null"
+
+    def run(self, sff_name, forward_primer, barcode) :
+        # 1. ensure SFF file name does not contain hyphens
+        # 2. write singular.txt
+        #   eg: Tg_2_25062012_1.sff singular.oligos
+        # 3. write singular.oligos
+        #   eg: forward AGRGGTGAAATYCGTGGAC
+        #       barcode TACAG Tg_2_25062012_1
+        # 4. run mothur "#sff.multiple(file=singular.txt, maxhomop=8, pdiffs=2, bdiffs=1)"
+        # 5. output : singular.singular.fasta   - rename
+        #             singular.singular.groups  - kill
+        #             singular.singular.names   - kill
+        new_sff_name = sff_name.replace('-', '_')
+        if new_sff_name != sff_name :
+            os.symlink(sff_name, new_sff_name)
+
+        f = open('tmp.txt', 'w')
+        print >> f, "%s tmp.oligos" % new_sff_name
+        f.close()
+
+        f = open('tmp.oligos', 'w')
+        print >> f, "forward %s" % forward_primer
+        print >> f, "barcode %s %s" % (barcode, new_sff_name)
+        f.close()
+
+        if os.system(self.command) != 0 :
+            open('tmp.tmp.fasta', 'w').close()
+
+        os.rename('tmp.tmp.fasta', sff_name + ".fasta")
+
+        try :
+            os.remove('tmp.txt')
+            os.remove('tmp.oligos')
+            os.remove('tmp.tmp.groups')
+            os.remove('tmp.tmp.names')
+
+            # TODO there are tonnes more files to be removed new_sff_name*
+
+        except OSError, ose :
+            pass
+
+        # TODO merge FASTA with the quality scores
+
+        return FastqFile(sff_name + ".fasta")
+

@@ -174,6 +174,15 @@ can use PAGAN to align them together and infer the representative sequence.
             self.canonical = self.sequences[0]
             return
 
+        # <DEBUG>
+        dups = []
+        for s in self.sequences :
+            dups.append(s.duplicates)
+        f = open('debug.compressed.dups', 'a')
+        print >> f, " ".join(map(str, sorted(dups, reverse=True)))
+        f.close()
+        # </DEBUG>
+
         # 1. align sequences
         prealigned = self.write_fasta()
         #aligned = Pagan().get_454_alignment(prealigned)
@@ -204,7 +213,7 @@ can use PAGAN to align them together and infer the representative sequence.
         aligned.close()
 
         # 2b. kill intermediate files
-        os.remove(prealigned)
+        #os.remove(prealigned)
         os.remove(aligned.name)
 
         # 3. construct canonical sequence

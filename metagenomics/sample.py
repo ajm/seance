@@ -7,7 +7,7 @@ import math
 from functools import total_ordering
 
 from metagenomics.filetypes import SffFile, FastqFile
-from metagenomics.tools import Sff2Fastq, GetMID, Pagan, Uchime
+from metagenomics.tools import Sff2Fastq, GetMID, Pagan, Uchime, PyroNoise
 from metagenomics.filters import Filter
 from metagenomics.db import SequenceDB
 
@@ -48,6 +48,20 @@ class Sample(object) :
 
         self.fastq.close()
     
+    def preprocess_denoise(self, filt, primer, mid_errors=0) :
+        self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
+        mid = GetMID(self.mid_length).run(self.fastq.get_filename())
+
+        self.fastq = PyroNoise.run(self.sff, primer, mid)
+        self.fastq.open()
+
+        for seq in self.fastq :
+            if filt.accept(seq) :
+                # XXX add to something
+                pass
+
+        self.fastq.close()
+
     # XXX old rebuild
 #    def rebuild(self) :
 #        self.fastq = FastqFile(os.path.join(self.workingdir, self.sff.get_basename() + ".sample"))
@@ -172,7 +186,9 @@ class NematodeSample(Sample) :
         self.metadata = metadata
 
     def sample_desc(self) :
-        return self.metadata.get('file')
+        d = self.metadata.get('date')
+        date = '/'.join(map(str, [d.day, d.month, d.year]))
+        return ' '.join([self.metadata.get('location'), self.metadata.get('lemur'), date])
 
     def __eq__(self, other) :
         return (self.metadata.get('location'), self.metadata.get('lemur'), self.metadata.get('date')) == \

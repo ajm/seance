@@ -12,7 +12,10 @@ def get_default_options() :
             'datadir'           : None,
             'tempdir'           : None,
             'metadata'          : None,
-            
+
+            'denoise'           : False,
+            'forward-primer'    : None,
+
             'compressed-length' : 300, 
             'minimum-quality'   : 25,
             'window-length'     : None,
@@ -33,7 +36,7 @@ def get_mandatory_options() :
     return ['datadir', 'tempdir', 'metadata']
 
 def get_required_programs() :
-    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime', 'blastn']
+    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime', 'blastn', 'mothur']
 
 def get_commands() :
     return ['all', 'preprocess', 'phylogeny', 'otu']
@@ -76,6 +79,9 @@ Legal commands are %s (see below for options).
         -m      --metadata  (default = %s)
 
     Preprocess options:
+        -k      --denoise             (default = %s)
+        -p      --forward-primer      (default = %s)
+
         -q      --minimum-quality     (default = %s)
         -w      --window-length       (default = %s)
         -n      --dont-remove-nbases  (default = %s)
@@ -98,7 +104,9 @@ Legal commands are %s (see below for options).
 """ % (sys.argv[0],                             list_sentence(quote_all(bold_all(get_commands()))), 
        sys.argv[0],                             list_sentence(bold_all(get_required_programs())),
        str(options['datadir']),                 str(options['tempdir']), 
-       str(options['metadata']),                str(options['minimum-quality']), 
+       str(options['metadata']),                
+       str(options['denoise']),                 str(options['forward-primer']),
+       str(options['minimum-quality']), 
        str(options['window-length']),           str(options['dont-remove-nbases']), 
        str(options['compressed-length']),       str(options['mid-errors']), 
        str(options['mid-length']),              str(options['phyla-read-threshold']), 
@@ -126,7 +134,7 @@ def parse_args(args) :
     try :
         opts,args = getopt.getopt(
                         args,
-                        "d:t:m:hnq:w:l:e:g:a:b:o:x:",
+                        "d:t:m:hnq:w:l:e:g:a:b:o:x:kp:",
                         [   "help", 
                             "verbose", 
                             "datadir=", 
@@ -141,7 +149,9 @@ def parse_args(args) :
                             "phyla-read-threshold=",
                             "phyla-sample-threshold=",
                             "otu-similarity=",
-                            "otu-dup-threshold="
+                            "otu-dup-threshold=",
+                            "denoise",
+                            "forward-primer"
                         ]
                     )
 
@@ -196,6 +206,12 @@ def parse_args(args) :
 
         elif o in ('-v', '--verbose') :
             options['verbose'] = True
+
+        elif o in ('-k', '--denoise') :
+            options['denoise'] = True
+
+        elif o in ('-p', '--forward-primer') :
+            options['forward-primer'] = a
 
         else :
             assert False, "unhandled option %s" % o

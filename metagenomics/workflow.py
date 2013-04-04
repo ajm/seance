@@ -76,7 +76,10 @@ class WorkFlow(object) :
 
         # read in all samples and perform basic quality filtering
         for sample in self.samples :
-            sample.preprocess(mf, self.options['compressed-length'], mid_errors=self.options['mid-errors'])
+            if options['denoise'] :
+                sample.preprocess_denoise(mf, options['primer'], mid_errors=self.options['mid-errors'])
+            else :
+                sample.preprocess(mf, self.options['compressed-length'], mid_errors=self.options['mid-errors'])
             p.increment()
 
         p.end()
