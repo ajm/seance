@@ -276,7 +276,7 @@ class BlastN(ExternalProgram) :
 class PyroNoise(ExternalProgram) :
     def __init__(self) :
         super(PyroNoise, self).__init__('PyroNoise')
-        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0)\" &> /dev/null"
+        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0)\""
 
     def run(self, sff_name, forward_primer, barcode) :
         # 1. ensure SFF file name does not contain hyphens
@@ -289,9 +289,13 @@ class PyroNoise(ExternalProgram) :
         # 5. output : singular.singular.fasta   - rename
         #             singular.singular.groups  - kill
         #             singular.singular.names   - kill
-        new_sff_name = sff_name.replace('-', '_')
-        if new_sff_name != sff_name :
-            os.symlink(sff_name, new_sff_name)
+        cwd = os.getcwd()
+        os.chdir(os.path.dirname(sff_name))
+        old_sff_name = os.path.basename(sff_name)
+
+        new_sff_name = old_sff_name.replace('-', '_')
+        if new_sff_name != old_sff_name :
+            os.symlink(old_sff_name, new_sff_name)
 
         f = open('tmp.txt', 'w')
         print >> f, "%s tmp.oligos" % new_sff_name
@@ -303,22 +307,46 @@ class PyroNoise(ExternalProgram) :
         f.close()
 
         if os.system(self.command) != 0 :
-            open('tmp.tmp.fasta', 'w').close()
+            open(sff_name + '.fasta', 'w').close()
+            os.remove(new_sff_name)
+            os.chdir(cwd)
+            return FastqFile(sff_name + '.fasta')
 
-        os.rename('tmp.tmp.fasta', sff_name + ".fasta")
+        os.rename('tmp.tmp.fasta', old_sff_name + ".fasta")
 
         try :
+            os.remove(new_sff_name)
             os.remove('tmp.txt')
             os.remove('tmp.oligos')
-            os.remove('tmp.tmp.groups')
-            os.remove('tmp.tmp.names')
+            #os.remove('tmp.tmp.groups')
+            #os.remove('tmp.tmp.names')
 
             # TODO there are tonnes more files to be removed new_sff_name*
 
         except OSError, ose :
             pass
 
-        # TODO merge FASTA with the quality scores
+        # 6.
+        # merge output files to get number of duplicates 
+        # in fasta file
+        counts = {}
+        f = open(new_sff_name[:-3] + 'shhh.trim.summary')
+        f.readline()
+        for line in f :
+            seqname,start,end,nbases,ambigs,polymer,numseqs = line.strip().split()
+            counts[seqname] = int(numseqs)
+        f.close()
 
-        return FastqFile(sff_name + ".fasta")
+        f = FastqFile(new_sff_name[:-3] + 'shhh.trim.fasta')
+        out_fasta = open(old_sff_name + ".fasta", 'w')
+        f.open()
+        for seq in f :
+            print >> out_fasta, "%s NumDuplicates=%d\n%s\n" % (seq.id, counts[seq.id[1:]], seq.sequence)
+        f.close()
+        out_fasta.close()
+
+        os.chdir(cwd)
+
+        return FastqFile(sff_name + '.fasta')
+        #return FastqFile(os.path.join(os.path.dirname(sff_name), out_fasta.name))
 

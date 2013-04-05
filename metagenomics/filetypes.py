@@ -136,12 +136,12 @@ class FastqFile(DataFile) :
         duplicates = 1
 
         if "NumDuplicates" in self._current[FastqFile.SEQID] :
-            mat = re.match(">seq(\d+)\ NumDuplicates=(\d+)$", self._current[FastqFile.SEQID])
+            mat = re.match(">(\S+)\ NumDuplicates=(\d+)$", self._current[FastqFile.SEQID])
 
             if not mat :
                 raise DataFileError("'%s' is a malformed sequence id" % self._current[FastqFile.SEQID])
 
-            seqid = int(mat.group(1))
+            seqid = mat.group(1)
             duplicates = int(mat.group(2))
 
         tmp = Sequence(self._current[FastqFile.SEQ], 

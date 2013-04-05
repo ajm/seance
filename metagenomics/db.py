@@ -12,8 +12,11 @@ from metagenomics.system import System
 from metagenomics.progress import Progress
 
 class SequenceDB(object) :
-    def __init__(self) :
-        self._db = SequenceDict()
+    def __init__(self, compressed) :
+        if compressed :
+            self._db = CompressedSequenceDict()
+        else :
+            self._db = SequenceDict()
 
     def put(self, seq) :
         return self._db.put(seq)
@@ -39,7 +42,60 @@ class SequenceDB(object) :
     def __str__(self) :
         return str(self._db)
 
-class SequenceDict(object):
+class SequenceDict(object) :
+    def __init__(self) :
+        self.db = {}
+        self.translate = {}
+        self.count = 0
+
+    def generate_key(self, s) :
+        self.translate[s] = len(self.db)
+        return self.translate[s]
+
+    def put(self, seq) :
+        tkey = repr(seq)
+        key = None
+
+        if self.translate.has_key(tkey) :
+            key = self.translate[tkey]
+            self.db[key].merge(seq)
+        else :
+            key = self.generate_key(tkey)
+            self.db[key] = seq
+
+        self.count += 1
+
+        return key
+
+    def get(self, key) :
+        return self.db[key]
+
+    def finalise(self) :
+        pass
+
+    def print_database(self, fname) :
+        f = open(fname, 'w')
+
+        for seqclust_key in sorted(self.db, reverse=True, key=lambda x : len(self.db[x])) :
+            print >> f, ">seq%d NumDuplicates=%d" % (seqclust_key, self.db[seqclust_key].duplicates)
+            print >> f, self.db[seqclust_key].sequence
+
+        f.close()
+
+    def has_sequence(self, cseq) :
+        return self.translate.has_key(cseq)
+
+    def __contains__(self, cseq) :
+        return self.has_sequence(cseq)
+
+    def __len__(self) :
+        return len(self.db)
+
+    def __str__(self) :
+        return "%s: added = %d, unique = %d" % \
+                (type(self).__name__, self.count, len(self))
+
+class CompressedSequenceDict(object) :
     def __init__(self) :
         self.db = {}
         self.translate = {}

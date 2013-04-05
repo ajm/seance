@@ -151,7 +151,7 @@ def parse_args(args) :
                             "otu-similarity=",
                             "otu-dup-threshold=",
                             "denoise",
-                            "forward-primer"
+                            "forward-primer="
                         ]
                     )
 
@@ -255,6 +255,10 @@ def check_options(options) :
 
     if options['otu-dup-threshold'] <= 0 :
         print >> sys.stderr, "Error: otu-dup-threshold must be > 0 (read %d)" % options['otu-dup-threshold']
+        sys.exit(-1)
+
+    if options['denoise'] and (options['forward-primer'] is None) :
+        print >> sys.stderr, "Error: forward-primer must be specified with denoise"
         sys.exit(-1)
 
 def main() :

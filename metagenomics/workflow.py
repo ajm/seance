@@ -20,7 +20,7 @@ class WorkFlow(object) :
         self.data_directory = options['datadir']
         self.temp_directory = options['tempdir']
         self.metadata_file = options['metadata']
-        self.seqdb = SequenceDB()
+        self.seqdb = SequenceDB(compressed=True if not options['denoise'] else False)
 
         self.samples = self.__create_samples()
         self.samples.sort()
@@ -39,6 +39,9 @@ class WorkFlow(object) :
 
         if not self.options['dont-remove-nbases'] :
             mf.add(AmbiguousFilter())
+
+        if self.options['denoise'] :
+            return mf
 
         mf.add(CompressedLengthFilter(self.options['compressed-length']))
 
@@ -76,8 +79,8 @@ class WorkFlow(object) :
 
         # read in all samples and perform basic quality filtering
         for sample in self.samples :
-            if options['denoise'] :
-                sample.preprocess_denoise(mf, options['primer'], mid_errors=self.options['mid-errors'])
+            if self.options['denoise'] :
+                sample.preprocess_denoise(mf, self.options['compressed-length'], self.options['forward-primer'], mid_errors=self.options['mid-errors'])
             else :
                 sample.preprocess(mf, self.options['compressed-length'], mid_errors=self.options['mid-errors'])
             p.increment()
@@ -86,6 +89,14 @@ class WorkFlow(object) :
 
         # get canonical sequences
         self.seqdb.finalise()
+
+
+
+        # XXX
+        #self.seqdb.print_database('denoise_database.fa')
+        #sys.exit(0)
+
+
 
         p = Progress("Chimeras", len(self.samples))
         p.start()

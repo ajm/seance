@@ -48,17 +48,17 @@ class Sample(object) :
 
         self.fastq.close()
     
-    def preprocess_denoise(self, filt, primer, mid_errors=0) :
+    def preprocess_denoise(self, filt, length, primer, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
         mid = GetMID(self.mid_length).run(self.fastq.get_filename())
 
-        self.fastq = PyroNoise.run(self.sff, primer, mid)
+        self.fastq = PyroNoise().run(self.sff.get_filename(), primer, mid)
         self.fastq.open()
 
         for seq in self.fastq :
             if filt.accept(seq) :
-                # XXX add to something
-                pass
+                seq.truncate(length) # XXX leading homopolymer may be off by one, maybe remove it?
+                self.seqcounts[self.db.put(seq)] += 1
 
         self.fastq.close()
 
