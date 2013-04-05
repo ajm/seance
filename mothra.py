@@ -16,18 +16,20 @@ def get_default_options() :
             'denoise'           : False,
             'forward-primer'    : None,
 
-            'compressed-length' : 300, 
+            'compress'          : False,
+
+            'length'            : 300, 
             'minimum-quality'   : 25,
             'window-length'     : None,
             'dont-remove-nbases': False,
             'mid-errors'        : 0,
             'mid-length'        : 5,
+            'homopolymer-length' : 8,
 
             'phyla-read-threshold'   : 2,
             'phyla-sample-threshold' : 2,
 
             'otu-similarity'    : 0.97,
-            'otu-dup-threshold' : 100,
 
             'verbose'           : False
            }
@@ -82,10 +84,14 @@ Legal commands are %s (see below for options).
         -k      --denoise             (default = %s)
         -p      --forward-primer      (default = %s)
 
+        -c      --compress            (default = %s)
+
+        -l      --length              (default = %s)
         -q      --minimum-quality     (default = %s)
         -w      --window-length       (default = %s)
         -n      --dont-remove-nbases  (default = %s)
-        -l      --compressed-length   (default = %s)
+        -x      --maximum-homopolymer (default = %s)
+
         -e      --mid-errors          (default = %s)
         -g      --mid-length          (default = %s)
 
@@ -95,23 +101,34 @@ Legal commands are %s (see below for options).
 
     OTU options:
         -o      --otu-similarity      (default = %s)
-        -x      --otu-dup-threshold   (default = %s)
 
     Misc options:
         -v      --verbose   (default = %s)
         -h      --help
 
-""" % (sys.argv[0],                             list_sentence(quote_all(bold_all(get_commands()))), 
-       sys.argv[0],                             list_sentence(bold_all(get_required_programs())),
-       str(options['datadir']),                 str(options['tempdir']), 
-       str(options['metadata']),                
-       str(options['denoise']),                 str(options['forward-primer']),
-       str(options['minimum-quality']), 
-       str(options['window-length']),           str(options['dont-remove-nbases']), 
-       str(options['compressed-length']),       str(options['mid-errors']), 
-       str(options['mid-length']),              str(options['phyla-read-threshold']), 
-       str(options['phyla-sample-threshold']),  str(options['otu-similarity']), 
-       str(options['otu-dup-threshold']),       str(options['verbose']))
+""" % (
+        sys.argv[0],
+        list_sentence(quote_all(bold_all(get_commands()))),
+        sys.argv[0],
+        list_sentence(bold_all(get_required_programs())),
+        str(options['datadir']),
+        str(options['tempdir']), 
+        str(options['metadata']),
+        str(options['denoise']),                 
+        str(options['forward-primer']),
+        str(options['compress']),                
+        str(options['length']),
+        str(options['minimum-quality']), 
+        str(options['window-length']),
+        str(options['dont-remove-nbases']), 
+        str(options['homopolymer-length']),
+        str(options['mid-errors']),
+        str(options['mid-length']),              
+        str(options['phyla-read-threshold']),
+        str(options['phyla-sample-threshold']),  
+        str(options['otu-similarity']), 
+        str(options['verbose'])
+      )
 
 def expect_cast(parameter, argument, func) :
     try :
@@ -134,7 +151,7 @@ def parse_args(args) :
     try :
         opts,args = getopt.getopt(
                         args,
-                        "d:t:m:hnq:w:l:e:g:a:b:o:x:kp:",
+                        "d:t:m:hnq:w:l:e:g:a:b:o:kp:cx:",
                         [   "help", 
                             "verbose", 
                             "datadir=", 
@@ -143,15 +160,16 @@ def parse_args(args) :
                             "minimum-quality=", 
                             "window-length=", 
                             "remove-nbases", 
-                            "compressed-length=",
+                            "length=",
                             "mid-errors=",
                             "mid-length=",
                             "phyla-read-threshold=",
                             "phyla-sample-threshold=",
                             "otu-similarity=",
-                            "otu-dup-threshold=",
                             "denoise",
-                            "forward-primer="
+                            "forward-primer=",
+                            "compress",
+                            "homopolymer-length="
                         ]
                     )
 
@@ -183,8 +201,8 @@ def parse_args(args) :
         elif o in ('-n', '--dont-remove-nbases') :
             options['dont-remove-nbases'] = True
 
-        elif o in ('-c', '--compress-length') :
-            options['compress-length'] = expect_int("compressed-length", a)
+        elif o in ('-c', '--length') :
+            options['length'] = expect_int("length", a)
         
         elif o in ('-e', '--mid-errors') :
             options['mid-errors'] = expect_int("mid-errors", a)
@@ -201,8 +219,11 @@ def parse_args(args) :
         elif o in ('-o', '--otu-similarity') :
             options['otu-similarity'] = expect_float("otu-similarity", a)
 
-        elif o in ('-x', '--otu-dup-threshold') :
-            options['otu-dup-threshold'] = expect_int("otu-dup-threshold", a)
+        elif o in ('-x', '--homopolymer-length') :
+            options['homopolymer-length'] = expect_int("homopolymer_length", a)
+
+        elif o in ('-c', '--compress') :
+            options['compress'] = True
 
         elif o in ('-v', '--verbose') :
             options['verbose'] = True
@@ -253,8 +274,8 @@ def check_options(options) :
         print >> sys.stderr, "Error: otu-similarity must be between 0.0 and 1.0 (read %.2f)" % options['otu-similarity']
         sys.exit(-1)
 
-    if options['otu-dup-threshold'] <= 0 :
-        print >> sys.stderr, "Error: otu-dup-threshold must be > 0 (read %d)" % options['otu-dup-threshold']
+    if options['denoise'] and options['compress'] :
+        print >> sys.stderr, "Error: denoise and compress cannot be used together"
         sys.exit(-1)
 
     if options['denoise'] and (options['forward-primer'] is None) :

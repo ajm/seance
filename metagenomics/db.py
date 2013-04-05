@@ -27,8 +27,8 @@ class SequenceDB(object) :
     def debug(self) :
         self._db.debug()
 
-    def finalise(self) :
-        self._db.finalise()
+    def finalise(self, length) :
+        self._db.finalise(length)
 
     def print_database(self, fname) :
         self._db.print_database(fname)
@@ -70,7 +70,7 @@ class SequenceDict(object) :
     def get(self, key) :
         return self.db[key]
 
-    def finalise(self) :
+    def finalise(self, length) :
         pass
 
     def print_database(self, fname) :
@@ -129,12 +129,12 @@ class CompressedSequenceDict(object) :
     def get(self, key) :
         return self.db[key]
 
-    def finalise(self) :
+    def finalise(self, length) :
         p = Progress("Alignment", len(self.db))
         p.start()
 
         for sc in self.db.values() :
-            sc.generate_canonical_sequence()
+            sc.generate_canonical_sequence(length)
             #sc.write_fasta(".canon")
             p.increment()
 
@@ -223,11 +223,12 @@ can use PAGAN to align them together and infer the representative sequence.
 
         return fname
 
-    def generate_canonical_sequence(self) :
+    def generate_canonical_sequence(self, length) :
         # there is only one sequence anyway, 
         # so no alignment necessary
         if len(self.sequences) == 1 :
             self.canonical = self.sequences[0]
+            self.canonical.truncate(length)
             return
 
         # <DEBUG>
@@ -302,6 +303,7 @@ can use PAGAN to align them together and infer the representative sequence.
                 tmp += iupac
 
         self.canonical = Sequence(tmp)
+        self.canonical.truncate(length)
 
     def __iadd__(self, other) :
         self.merge(other)

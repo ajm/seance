@@ -24,7 +24,24 @@ class Sample(object) :
     def __contains__(self, seqkey) :
         return seqkey in self.seqcounts
 
-    def preprocess(self, filt, compressed_length, mid_errors=0) :
+    def preprocess(self, filt, length, mid_errors=0) :
+        self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
+        mid = GetMID(self.mid_length).run(self.fastq.get_filename())
+
+        self.fastq.open()
+
+        for seq in self.fastq :
+            if filt.accept(seq) :
+                if self.__hamming_distance(mid, seq[:self.mid_length]) > mid_errors :
+                    continue
+
+                seq.remove_mid(self.mid_length)
+                seq.truncate(length)
+                self.seqcounts[self.db.put(seq)] += 1
+
+        self.fastq.close()
+    
+    def preprocess_compress(self, filt, compressed_length, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
 
         mid = GetMID(self.mid_length).run(self.fastq.get_filename())
@@ -57,22 +74,9 @@ class Sample(object) :
 
         for seq in self.fastq :
             if filt.accept(seq) :
-                seq.truncate(length) # XXX leading homopolymer may be off by one, maybe remove it?
                 self.seqcounts[self.db.put(seq)] += 1
 
         self.fastq.close()
-
-    # XXX old rebuild
-#    def rebuild(self) :
-#        self.fastq = FastqFile(os.path.join(self.workingdir, self.sff.get_basename() + ".sample"))
-#        self.fastq.open()
-#
-#        for seq in self.fastq :
-#            key = self.db.put(seq)
-#            self.seqcounts[key] += seq.duplicates
-#            self.db.get(key).generate_canonical_sequence() # all read in sequences are already canonical
-#
-#        self.fastq.close()
 
     def rebuild(self, newdb) :
         self.db = newdb
@@ -93,46 +97,6 @@ class Sample(object) :
             self.seqcounts[key] = count
 
         self.fastq.close()
-
-    def simple_cluster(self, similarity) :
-        if len(self) == 0 :
-            return
-
-        threshold = math.ceil(self.__average_length() * (1.0 - similarity))
-        clusters = []
-
-        # perform multiple alignment
-        fq = Pagan().get_454_alignment(self.print_sample_raw())
-        fq.open()
-
-        # cluster based on hamming distance
-        for seq in fq :
-            clustered = False
-
-            if seq.id == ">consensus" :
-                continue
-
-            for cluster in clusters :
-                hamming = self.__hamming_distance(cluster[0].sequence, seq.sequence)
-                if hamming < threshold :
-                    cluster.append(seq)
-                    clustered = True
-                    break
-
-            if not clustered :
-                clusters.append([seq])
-
-        fq.close()
-
-        # print out clusters
-        f = open(self.workingdir + os.sep + self.sff.get_basename() + ".cluster", 'w')
-
-        for i in range(len(clusters)) :
-            for seq in clusters[i] :
-                print >> f, ">seq%s NumDuplicates=%d otu=%d" % (seq.id, seq.duplicates, i) 
-                print >> f, seq.sequence
-
-        f.close()
 
     def detect_chimeras(self) :
         if len(self) == 0 :

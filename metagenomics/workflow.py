@@ -20,19 +20,26 @@ class WorkFlow(object) :
         self.data_directory = options['datadir']
         self.temp_directory = options['tempdir']
         self.metadata_file = options['metadata']
-        self.seqdb = SequenceDB(compressed=True if not options['denoise'] else False)
+        self.seqdb = SequenceDB(compressed=options['compress'])
 
         self.samples = self.__create_samples()
         self.samples.sort()
 
     def __get_datafiles(self) :
-        return glob.glob(self.data_directory + os.sep + "*sff")
+        return glob.glob(os.path.join(self.data_directory, "*sff"))
 
     def __create_samples(self) :
         mdr = MetadataReader(self.metadata_file)
         mdr.process()
 
-        return map(lambda x : NematodeSample(x, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(os.path.basename(x))), self.__get_datafiles())
+        tmp = []
+
+        for sample in self.__get_datafiles() :
+            fname = os.path.basename(sample)
+            s = NematodeSample(sample, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(fname))
+            tmp.append(s)
+
+        return tmp
 
     def __build_filter(self) :
         mf = MultiFilter()
@@ -43,7 +50,10 @@ class WorkFlow(object) :
         if self.options['denoise'] :
             return mf
 
-        mf.add(CompressedLengthFilter(self.options['compressed-length']))
+        if self.options['compress'] :
+            mf.add(CompressedLengthFilter(self.options['length']))
+        else :
+            mf.add(LengthFilter(self.options['length'] + self.options['mid-length']))
 
         if self.options['minimum-quality'] != None :
             if self.options['window-length'] != None :
@@ -74,44 +84,52 @@ class WorkFlow(object) :
     def preprocess(self) :
         mf = self.__build_filter()
 
+        # read in all samples and perform basic quality filtering
         p = Progress("Reading", len(self.samples))
         p.start()
 
-        # read in all samples and perform basic quality filtering
         for sample in self.samples :
             if self.options['denoise'] :
-                sample.preprocess_denoise(mf, self.options['compressed-length'], self.options['forward-primer'], mid_errors=self.options['mid-errors'])
+                sample.preprocess_denoise(mf, 
+                        self.options['length'], 
+                        self.options['forward-primer'], 
+                        mid_errors=self.options['mid-errors'])
+
+            elif self.options['compress'] :
+                sample.preprocess_compress(mf, 
+                        self.options['length'], 
+                        mid_errors=self.options['mid-errors'])
+            
             else :
-                sample.preprocess(mf, self.options['compressed-length'], mid_errors=self.options['mid-errors'])
+                sample.preprocess(mf, 
+                        self.options['length'], 
+                        mid_errors=self.options['mid-errors'])
+            
             p.increment()
 
         p.end()
 
-        # get canonical sequences
-        self.seqdb.finalise()
+        if self.options['compress'] :
+            # get canonical sequences and truncate them to 'length'
+            self.seqdb.finalise(self.options['length'])
 
 
-
-        # XXX
-        #self.seqdb.print_database('denoise_database.fa')
-        #sys.exit(0)
-
-
-
+        # chimera detection
         p = Progress("Chimeras", len(self.samples))
         p.start()
         
-        # chimera detection + clustering based on multiple alignment
         for sample in self.samples :
             sample.detect_chimeras()
-            sample.print_sample_raw()
-
             p.increment()
 
         p.end()
 
-        # see everything in the database
-        self.seqdb.print_database(self.temp_directory + os.sep + "database.fasta")
+        
+        # print out everything in '.sample' files + '.database' file
+        for sample in self.samples :
+            sample.print_sample_raw()
+        
+        self.seqdb.print_database(os.path.join(self.temp_directory, "database.fasta"))
 
         print >> sys.stderr, "\n" + str(self.seqdb)
 
@@ -169,22 +187,22 @@ class WorkFlow(object) :
             queries = os.path.join(self.temp_directory, sample.sff.get_basename() + ".sample")
             placement = Pagan().phylogenetic_placement(ref_alignment, ref_tree, queries)
 
-    def otu(self) :
-        self.__rebuild_database()
-
-        c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['otu-dup-threshold'])
-        c.create_clusters()
-
-        f = open(os.path.join(self.temp_directory, "database.clusters"), 'w')
-
-        for ci in range(len(c.clusters)) :
-            cluster = c.clusters[ci]
-            for key in cluster :
-                seq = self.seqdb.get(key)
-                print >> f, ">seq%d NumDuplicates=%d otu=%d" % (seq.id, seq.duplicates, ci)
-                print >> f, seq.sequence
-
-        f.close()
+#    def otu(self) :
+#        self.__rebuild_database()
+#
+#        c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['otu-dup-threshold'])
+#        c.create_clusters()
+#
+#        f = open(os.path.join(self.temp_directory, "database.clusters"), 'w')
+#
+#        for ci in range(len(c.clusters)) :
+#            cluster = c.clusters[ci]
+#            for key in cluster :
+#                seq = self.seqdb.get(key)
+#                print >> f, ">seq%d NumDuplicates=%d otu=%d" % (seq.id, seq.duplicates, ci)
+#                print >> f, seq.sequence
+#
+#        f.close()
 
     def otu_phylogeny(self) :
         self.__rebuild_database()

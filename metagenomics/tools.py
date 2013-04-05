@@ -276,7 +276,9 @@ class BlastN(ExternalProgram) :
 class PyroNoise(ExternalProgram) :
     def __init__(self) :
         super(PyroNoise, self).__init__('PyroNoise')
-        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0)\""
+        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0)\" &> /dev/null"
+        # TODO remove bdiff (default is zero anyway)
+        # TODO remove maxhomop (add to my code)
 
     def run(self, sff_name, forward_primer, barcode) :
         # 1. ensure SFF file name does not contain hyphens
@@ -314,17 +316,13 @@ class PyroNoise(ExternalProgram) :
 
         os.rename('tmp.tmp.fasta', old_sff_name + ".fasta")
 
-        try :
-            os.remove(new_sff_name)
-            os.remove('tmp.txt')
-            os.remove('tmp.oligos')
-            #os.remove('tmp.tmp.groups')
-            #os.remove('tmp.tmp.names')
-
-            # TODO there are tonnes more files to be removed new_sff_name*
-
-        except OSError, ose :
-            pass
+        # TODO there are tonnes more files to be removed new_sff_name*
+        files = [new_sff_name, 'tmp.txt', 'tmp.oligos']
+        for fname in files :
+            try :
+                os.remove(fname)
+            except OSError, ose :
+                pass
 
         # 6.
         # merge output files to get number of duplicates 
@@ -348,5 +346,4 @@ class PyroNoise(ExternalProgram) :
         os.chdir(cwd)
 
         return FastqFile(sff_name + '.fasta')
-        #return FastqFile(os.path.join(os.path.dirname(sff_name), out_fasta.name))
 
