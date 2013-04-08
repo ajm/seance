@@ -24,10 +24,10 @@ def get_default_options() :
             'dont-remove-nbases': False,
             'mid-errors'        : 0,
             'mid-length'        : 5,
-            'homopolymer-length' : 8,
+            'max-homopolymer'   : 8,
 
-            'phyla-read-threshold'   : 2,
-            'phyla-sample-threshold' : 2,
+            'read-threshold'   : 2,
+            'sample-threshold' : 2,
 
             'otu-similarity'    : 0.97,
 
@@ -76,56 +76,51 @@ Legal commands are %s (see below for options).
 %s assumes that the following programs are installed: %s.
     
     Mandatory:
-        -d      --datadir   (default = %s)
-        -t      --tempdir   (default = %s)
-        -m      --metadata  (default = %s)
+        -d DIR      --datadir=DIR
+        -t DIR      --tempdir=DIR
+        -m FILE     --metadata=FILE
 
     Preprocess options:
-        -k      --denoise             (default = %s)
-        -p      --forward-primer      (default = %s)
+        -k          --denoise               (default = %s)
+        -p SEQ      --forward-primer=SEQ    (default = %s)
 
-        -c      --compress            (default = %s)
+        -c          --compress              (default = %s)
 
-        -l      --length              (default = %s)
-        -q      --minimum-quality     (default = %s)
-        -w      --window-length       (default = %s)
-        -n      --dont-remove-nbases  (default = %s)
-        -x      --maximum-homopolymer (default = %s)
+        -l NUM      --length=NUM            (default = %s)
+        -q NUM      --min-quality=NUM       (default = %s)
+        -w NUM      --window-length=NUM     (default = %s)
+        -x NUM      --max-homopolymer=NUM   (default = %s)
+        -n          --dont-remove-nbases    (default = %s)
 
-        -e      --mid-errors          (default = %s)
-        -g      --mid-length          (default = %s)
+        -e NUM      --mid-errors=NUM        (default = %s)
+        -g NUM      --mid-length=NUM        (default = %s)
 
-    Phylogeny options:
-        -a      --phyla-read-threshold      (default = %s)
-        -b      --phyla-sample-threshold    (default = %s)
-
-    OTU options:
-        -o      --otu-similarity      (default = %s)
+    OTU and Phylogeny options:
+        -a NUM      --read-threshold=NUM    (default = %s)
+        -b NUM      --sample-threshold=NUM  (default = %s)
+        -o REAL     --otu-similarity=REAL   (default = %s)
 
     Misc options:
-        -v      --verbose   (default = %s)
-        -h      --help
+        -v          --verbose               (default = %s)
+        -h          --help
 
 """ % (
         sys.argv[0],
         list_sentence(quote_all(bold_all(get_commands()))),
         sys.argv[0],
         list_sentence(bold_all(get_required_programs())),
-        str(options['datadir']),
-        str(options['tempdir']), 
-        str(options['metadata']),
         str(options['denoise']),                 
         str(options['forward-primer']),
         str(options['compress']),                
         str(options['length']),
         str(options['minimum-quality']), 
         str(options['window-length']),
+        str(options['max-homopolymer']),
         str(options['dont-remove-nbases']), 
-        str(options['homopolymer-length']),
         str(options['mid-errors']),
         str(options['mid-length']),              
-        str(options['phyla-read-threshold']),
-        str(options['phyla-sample-threshold']),  
+        str(options['read-threshold']),
+        str(options['sample-threshold']),  
         str(options['otu-similarity']), 
         str(options['verbose'])
       )
@@ -157,14 +152,14 @@ def parse_args(args) :
                             "datadir=", 
                             "tempdir=", 
                             "metadata=", 
-                            "minimum-quality=", 
+                            "min-quality=", 
                             "window-length=", 
                             "remove-nbases", 
                             "length=",
                             "mid-errors=",
                             "mid-length=",
-                            "phyla-read-threshold=",
-                            "phyla-sample-threshold=",
+                            "read-threshold=",
+                            "sample-threshold=",
                             "otu-similarity=",
                             "denoise",
                             "forward-primer=",
@@ -192,7 +187,7 @@ def parse_args(args) :
         elif o in ('-m', '--metadata') :
             options['metadata'] = a
 
-        elif o in ('-q', '--minimum-quality') :
+        elif o in ('-q', '--min-quality') :
             options['minquality'] = expect_int("minquality", a)
 
         elif o in ('-w', '--window-length') :
@@ -210,17 +205,17 @@ def parse_args(args) :
         elif o in ('-g', '--mid-length') :
             options['mid-length'] = expect_int("mid-length", a)
 
-        elif o in ('-a', '--phyla-read-threshold') :
-            options['phyla-read-threshold'] = expect_int("phyla-read-threshold", a)
+        elif o in ('-a', '--read-threshold') :
+            options['read-threshold'] = expect_int("read-threshold", a)
 
-        elif o in ('-b', '--phyla-sample-threshold') :
-            options['phyla-sample-threshold'] = expect_int("phyla-sample-threshold", a)
+        elif o in ('-b', '--sample-threshold') :
+            options['sample-threshold'] = expect_int("sample-threshold", a)
 
         elif o in ('-o', '--otu-similarity') :
             options['otu-similarity'] = expect_float("otu-similarity", a)
 
-        elif o in ('-x', '--homopolymer-length') :
-            options['homopolymer-length'] = expect_int("homopolymer_length", a)
+        elif o in ('-x', '--max-homopolymer') :
+            options['max-homopolymer'] = expect_int("max-homopolymer", a)
 
         elif o in ('-c', '--compress') :
             options['compress'] = True
@@ -262,12 +257,12 @@ def check_options(options) :
                  system.check_file(options['metadata'])] :
         sys.exit(-1)
 
-    if options['phyla-sample-threshold'] <= 0 :
-        print >> sys.stderr, "Error: phyla-sample-threshold must be > 0 (read %d)" % options['phyla-sample-threshold']
+    if options['sample-threshold'] <= 0 :
+        print >> sys.stderr, "Error: sample-threshold must be > 0 (read %d)" % options['sample-threshold']
         sys.exit(-1)
 
-    if options['phyla-read-threshold'] <= 0 :
-        print >> sys.stderr, "Error: phyla-read-threshold must be > 0 (read %d)" % options['phyla-read-threshold']
+    if options['read-threshold'] <= 0 :
+        print >> sys.stderr, "Error: read-threshold must be > 0 (read %d)" % options['read-threshold']
         sys.exit(-1)
 
     if options['otu-similarity'] < 0.0 or options['otu-similarity'] > 1.0 :

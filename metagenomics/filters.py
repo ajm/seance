@@ -93,6 +93,26 @@ class WindowedQualityFilter(Filter) :
 
         return True
 
+class HomopolymerFilter(Filter) :
+    def __init__(self, maxlen) :
+        self.maxlen = maxlen
+
+    def accept(self, seq) :
+        tmpchar = ""
+        tmphp = 0
+
+        for c in seq.sequence :
+            if c != tmpchar :
+                tmpchar = c
+                tmphp = 0
+
+            tmphp += 1
+
+            if tmphp > self.maxlen :
+                return False
+
+        return True
+
 class MIDHomopolymer(Filter) :
     def __init__(self, reject=True) :
         self.op = operator.ne if reject else operator.eq

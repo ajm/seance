@@ -55,6 +55,9 @@ class WorkFlow(object) :
         else :
             mf.add(LengthFilter(self.options['length'] + self.options['mid-length']))
 
+        if self.options['max-homopolymer'] > 0 :
+            mf.add(HomopolymerFilter(self.options['max-homopolymer']))
+
         if self.options['minimum-quality'] != None :
             if self.options['window-length'] != None :
                 mf.add(WindowedQualityFilter(self.options['minimum-quality'], self.options['window-length']))
@@ -170,7 +173,7 @@ class WorkFlow(object) :
     def phylogeny(self) :
         self.__rebuild_database()
 
-        phy_keys = self.__get_important_keys(self.options['phyla-read-threshold'], self.options['phyla-sample-threshold'])
+        phy_keys = self.__get_important_keys(self.options['read-threshold'], self.options['sample-threshold'])
         phy_fasta = self.__write_fasta(phy_keys, "reference_phyla.fasta")
 
         # create a reference phylogeny
@@ -207,7 +210,7 @@ class WorkFlow(object) :
     def otu_phylogeny(self) :
         self.__rebuild_database()
 
-        phy_keys = self.__get_important_keys(self.options['phyla-read-threshold'], self.options['phyla-sample-threshold'])
+        phy_keys = self.__get_important_keys(self.options['read-threshold'], self.options['sample-threshold'])
 
         # cluster everything
         c = Cluster(self.seqdb, self.options['otu-similarity'])
