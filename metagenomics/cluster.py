@@ -50,8 +50,8 @@ class Cluster(object) :
         # write out
         f = open(os.path.join(System.tempdir(), 'tmp'), 'w')
 
-        print >> f, seq1
-        print >> f, seq2
+        print >> f, seq1.fasta()
+        print >> f, seq2.fasta()
 
         f.close()
 
@@ -76,10 +76,24 @@ class Cluster(object) :
             return 0.0
 
         # calculate distance
-        same = len(filter(lambda x: x[0] == x[1], zip(aligned[0], aligned[1])))
+        #same = len(filter(lambda x: x[0] == x[1], zip(aligned[0], aligned[1])))
         leng = float(min(len(aligned[0]), len(aligned[1])))
 
-        return same / leng
+        last_gap = False
+        diff = 0
+        for c1,c2 in zip(aligned[0], aligned[1]) :
+            gap = '-' in (c1,c2)
+
+            if last_gap and gap :
+                continue
+
+            if c1 != c2 :
+                diff += 1
+
+            last_gap = gap
+
+        #return same / leng
+        return (leng - diff) / leng
 
     def create_clusters(self, keys=None) :
         seqcount = collections.Counter()

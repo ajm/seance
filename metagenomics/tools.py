@@ -69,8 +69,14 @@ class GetMID(object) :
             raise ExternalProgramError("%s: %s", type(self).__name__, output)
 
         output = output.strip()
+
+        # if the file is empty, there is nothing to read, so
+        # returning an empty string will not matter...
+        if output == '':
+            return output
+
         if re.match("[GATC]{%d}" % self.length, output) == None :
-            raise ExternalProgramError("%s: %s does not look like a MID", type(self).__name__, output)
+            raise ExternalProgramError("%s: %s does not look like a MID" % (type(self).__name__, output))
 
         return output
 
@@ -211,7 +217,8 @@ class Uchime(ExternalProgram) :
             
             if data[16] == 'Y' :
                 # data[1] = "seqXXX/ab=YYY"
-                seqid = int(data[1].split('/')[0][3:])
+                #seqid = int(data[1].split('/')[0][3:])
+                seqid = data[1].split('/')[0]
                 tmp.append(seqid)
 
         f.close()
@@ -261,13 +268,19 @@ class BlastN(ExternalProgram) :
             if fields[0] in names :
                 continue
             
-            desc = fields[1].split('|')
-            if re.match(".+\.\d+", desc[3]) :
-                try :
-                    key = int(fields[0])
+            try :
+                desc = fields[1].split('|')
 
-                except ValueError, ve :
-                    continue
+            except IndexError :
+                print >> sys.stderr, "Error: could not split line from blastn: %s" % str(fields)
+                continue
+
+            if re.match(".+\.\d+", desc[3]) :
+                key = fields[0]
+                #try :
+                #    key = int(fields[0])
+                #except ValueError, ve :
+                #    continue
 
                 names[key] = "%s_%s_%s" % (fields[0], self.__get_complete_desc(desc[3]), fields[2])
 

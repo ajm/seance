@@ -43,7 +43,6 @@ class Sample(object) :
     
     def preprocess_compress(self, filt, compressed_length, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
-
         mid = GetMID(self.mid_length).run(self.fastq.get_filename())
 
         self.fastq.open()
@@ -102,14 +101,15 @@ class Sample(object) :
         if len(self) == 0 :
             return
         
-        self.chimeras = Uchime().run(self.print_sample_raw(duplicate_label="/ab"))
+        self.chimeras = Uchime().run(self.print_sample(duplicate_label="/ab"))
 
-    def print_sample_raw(self, whitelist=None, duplicate_label=" NumDuplicates", extension=".sample") :
-        f = open(self.workingdir + os.sep + self.sff.get_basename() + extension, 'w')
+    def print_sample(self, whitelist=None, duplicate_label=" NumDuplicates", extension=".sample") :
+        f = open(os.path.join(self.workingdir, self.sff.get_basename() + extension), 'w')
 
         for key,freq in self.seqcounts.most_common() :
             if ((whitelist is None) or (key in whitelist)) and (key not in self.chimeras) :
-                print >> f, ">seq%d%s=%d" % (key, duplicate_label, freq)
+                #print >> sys.stderr, key, freq
+                print >> f, ">%s%s=%d" % (key, duplicate_label, freq)
                 print >> f, self.db.get(key).sequence
 
         f.close()

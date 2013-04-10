@@ -162,7 +162,7 @@ class CompressedSequenceDict(object) :
         f = open(fname, 'w')
 
         for seqclust_key in sorted(self.db, reverse=True, key=lambda x : len(self.db[x])) :
-            print >> f, ">seq%d NumDuplicates=%d" % (seqclust_key, len(self.db[seqclust_key]))
+            print >> f, ">%d NumDuplicates=%d" % (seqclust_key, len(self.db[seqclust_key]))
             print >> f, self.db[seqclust_key].canonical.sequence
 
         f.close()

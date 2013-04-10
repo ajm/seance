@@ -257,7 +257,7 @@ class MetadataReader(object) :
             smd.put('date', date)
             smd.put('location', location)
             smd.put('eggs', num_eggs)
-            
+
             self.metadata[filename] = smd
             
         f.close()
@@ -270,3 +270,4 @@ class MetadataReader(object) :
             return datetime.date(1970, 1, 1) # XXX or sys.exit ?
 
         return datetime.date(year, month, day)
+

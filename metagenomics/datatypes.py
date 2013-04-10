@@ -174,9 +174,22 @@ class Sequence(object) :
     def __repr__(self) :
         return repr(self.sequence)
 
+    def fasta(self, duplabel=' NumDuplicates') :
+        return ">%s%s=%d\n%s\n" % (self.id, duplabel, self.duplicates, self.sequence)
+
+    def fastq(self, duplabel=' NumDuplicates') :
+        if not self.qual_str :
+            raise Exception('cannot print as fastq, no qualities present')
+
+        return "@%s+\n%s\n" % (self.fasta(duplabel)[1:], self.qual_str)
+
     def __str__(self) :
+        raise Exception
+
+        # TODO sensible default
+
         tmp = '@' if self.qual_str else '>'
-        s = "%s%s\n%s\n" % (tmp, ("seq%d" % self.id) if self.id != None else "seq", self.sequence)
+        s = "%s%s\n%s\n" % (tmp, self.id if self.id != None else "seq", self.sequence)
         
         if self.qual_str :
             s += ("+\n%s\n" % self.qual_str)

@@ -36,6 +36,13 @@ class WorkFlow(object) :
 
         for sample in self.__get_datafiles() :
             fname = os.path.basename(sample)
+
+            md = mdr.get(fname)
+
+            if md == None :
+                print >> sys.stderr, "Warning: skipping %s, metadata missing..." % fname
+                continue
+
             s = NematodeSample(sample, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(fname))
             tmp.append(s)
 
@@ -80,7 +87,7 @@ class WorkFlow(object) :
                 print "\rError: %s\nHave all the samples been preprocessed?" % str(dfe)
                 sys.exit(-1)
 
-            sample.print_sample_raw(extension=".rebuild2")
+            sample.print_sample(extension=".rebuild")
 
         p.end()
 
@@ -130,7 +137,7 @@ class WorkFlow(object) :
         
         # print out everything in '.sample' files + '.database' file
         for sample in self.samples :
-            sample.print_sample_raw()
+            sample.print_sample()
         
         self.seqdb.print_database(os.path.join(self.temp_directory, "database.fasta"))
 
@@ -158,13 +165,13 @@ class WorkFlow(object) :
     def __write_fasta(self, keys, filename, names=None) :
         f = open(os.path.join(self.temp_directory, filename), 'w')
 
-        for key in keys :
-            if names is None :
-                print >> f, ">%d" % key
-            else :
-                print >> f, ">%s" % names.get(key, "%d_unknown" % key)
-
-            print >> f, self.seqdb.get(key).sequence
+        if names is None :
+            for key in keys :
+                print >> f, self.seqdb.get(key).fasta()
+        else :
+            for key in keys :
+                print >> f, ">%s" % names.get(key, "%s_unknown" % key)
+                print >> f, self.seqdb.get(key).sequence
 
         f.close()
 
@@ -233,11 +240,11 @@ class WorkFlow(object) :
         # write results
         b = BiomFile()
 
-        for sample in self.samples :
-            b.add_sample(sample.sample_desc(), sample.metadata)
+        for index, sample in enumerate(self.samples) :
+            b.add_sample(("%d " % index) + sample.sample_desc(), sample.metadata)
 
         for key in clust_keys :
-            b.add_otu(otu_names.get(key, "%d_unknown" % key))
+            b.add_otu(otu_names.get(key, "%s_unknown" % key))
 
         for sindex in range(len(self.samples)) :
             sample = self.samples[sindex]
