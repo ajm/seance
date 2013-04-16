@@ -322,7 +322,7 @@ class PyroNoise(ExternalProgram) :
         f.close()
 
         if os.system(self.command) != 0 :
-            open(sff_name + '.fasta', 'w').close()
+            open(old_sff_name + '.fasta', 'w').close()
             os.remove(new_sff_name)
             os.chdir(cwd)
             return FastqFile(sff_name + '.fasta')

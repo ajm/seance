@@ -188,15 +188,15 @@ def parse_args(args) :
             options['metadata'] = a
 
         elif o in ('-q', '--min-quality') :
-            options['minquality'] = expect_int("minquality", a)
+            options['minimum-quality'] = expect_int("minimum-quality", a)
 
         elif o in ('-w', '--window-length') :
-            options['winquality'] = expect_int("winquality", a)
+            options['window-length'] = expect_int("window-length", a)
 
         elif o in ('-n', '--dont-remove-nbases') :
             options['dont-remove-nbases'] = True
 
-        elif o in ('-c', '--length') :
+        elif o in ('-l', '--length') :
             options['length'] = expect_int("length", a)
         
         elif o in ('-e', '--mid-errors') :
@@ -303,8 +303,8 @@ def main() :
     if command in ('otu', 'all') :
         wf.otu_phylogeny()
 
-    if command in ('phylogeny', 'all') :
-        wf.phylogeny()
+    #if command in ('phylogeny', 'all') :
+    #    wf.phylogeny()
 
     return 0
 
