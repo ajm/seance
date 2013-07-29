@@ -85,7 +85,7 @@ class Pagan(ExternalProgram) :
         super(Pagan, self).__init__('pagan')
 
     def get_454_alignment(self, fasta_fname) :
-        command = "pagan --use-consensus --use-duplicate-weigths --homopolymer --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
+        command = "pagan --use-consensus --use-duplicate-weights --homopolymer --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
         out_fname = fasta_fname + ".out"
 
         try :
