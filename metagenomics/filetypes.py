@@ -242,12 +242,16 @@ class MetadataReader(object) :
             date = self.make_date(data[4])
             location = data[5]
             try :
-                num_eggs = int(data[6])
+                num_eggs = data[6]
+                if num_eggs != 'NA' :
+                    num_eggs = int(data[6])
+                else :
+                    num_eggs = -1
 
             except ValueError, ve :
                 print >> sys.stderr, \
                          "Warning: line %d of metadata file '%s' egg field is not a number (read '%d')" % \
-                         (line_num, self.metadata_file, data[6])
+                         (line_num, self.metadata_fname, data[6])
                 continue
             
             smd = SampleMetadata()

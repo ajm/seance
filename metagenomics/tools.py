@@ -125,6 +125,23 @@ class Pagan(ExternalProgram) :
 
         return out_fname + ".fas"
 
+    def silva_phylogenetic_alignment(self, ref_alignment, ref_tree, queries) :
+        command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s " + \
+                        "--fast-placement --use-anchors --prune-extended-alignment --test-every-terminal-node " + \
+                        "--xml --trim-extended-alignment --score-only-ungapped"
+
+        #out_fname = os.path.splitext(queries)[0] + ".silva"
+        out_fname = queries + ".silva"
+
+        try :
+            self.system(command % (ref_alignment, ref_tree, queries, out_fname))
+
+        except ExternalProgramError, epe :
+            print >> sys.stderr, "Error: " + str(epe)
+            sys.exit(-1)
+
+        return out_fname + ".pruned.fas", out_fname + ".pruned.tre"
+
 class Aligner1D(object) :
     def __init__(self) :
         self.__reset()

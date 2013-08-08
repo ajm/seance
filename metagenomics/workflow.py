@@ -4,7 +4,7 @@ import glob
 import collections
 
 from metagenomics.sample import NematodeSample
-from metagenomics.filetypes import MetadataReader, DataFileError
+from metagenomics.filetypes import MetadataReader, DataFileError, FastqFile
 from metagenomics.datatypes import SampleMetadata
 from metagenomics.filters import *
 from metagenomics.db import SequenceDB
@@ -226,16 +226,22 @@ class WorkFlow(object) :
         clust_keys = map(lambda x : x[0], c.clusters)
         phy_fasta = self.__write_fasta(clust_keys, "reference_phyla.fasta")
 
+#        print '\n'.join(clust_keys)
+
         # blast to get better names
         print "Running blastn to get OTU names..."
         otu_names = BlastN().get_names(phy_fasta)
 
         phy_fasta = self.__write_fasta(clust_keys, "reference_phyla.fasta", otu_names)
 
-        # create a reference phylogeny
-        print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
-        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
-
+        if not self.options['silva'] :
+            # create a reference phylogeny
+            print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
+            ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
+        else :
+            print "Aligning %s sequences with PAGAN against SILVA ..." % (len(phy_keys))
+            s = self.options['silva']
+            ref_alignment,ref_tree = Pagan().silva_phylogenetic_alignment(s + '.fasta', s + '.tree', phy_fasta)
 
         # write results
         b = BiomFile()
@@ -246,14 +252,44 @@ class WorkFlow(object) :
         for key in clust_keys :
             b.add_otu(otu_names.get(key, "%s_unknown" % key))
 
+        if self.options['silva'] :
+            fq = FastqFile(phy_fasta + '.silva.pruned.fas')
+            fq.open()
+
+            # XXX this is not very robust
+            for seq in fq :
+                if ';' in seq.id :
+                    b.add_otu(seq.id.split(';')[-1])
+
+            fq.close()
+
+        for cindex in range(len(c.clusters)) :
+            cluster = c.clusters[cindex]
+            key = clust_keys[cindex]
+            cluster_label = otu_names.get(key, "%s_unknown" % key)
+
+            f = open(os.path.join(self.temp_directory, "cluster_%s.fasta" % (cluster_label)), 'w')
+            for read in cluster :
+                print >> f, self.seqdb.get(read).fasta().rstrip()
+            f.close()
+
         for sindex in range(len(self.samples)) :
             sample = self.samples[sindex]
             for cindex in range(len(c.clusters)) :
                 cluster = c.clusters[cindex]
                 count = 0
+
+                key = clust_keys[cindex]
+                sample_label = "%s-%s_%s" % (sample.metadata.get('location'), sample.metadata.get('lemur'), sample.metadata.get('file').split('-')[0])
+                cluster_label = otu_names.get(key, "%s_unknown" % key)
+
+                f = open(os.path.join(self.temp_directory, "sample_%s_cluster_%s.fasta" % (sample_label, cluster_label)), 'w')
                 for read in cluster :
                     if read in sample :
                         count += sample.seqcounts[read]
+                        print >> f, self.seqdb.get(read).fasta().rstrip() # does anything depend on the newline from .fasta() ?
+
+                f.close()
 
                 b.add_quantity(cindex, sindex, count)
 
