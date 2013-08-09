@@ -310,7 +310,10 @@ class PyroNoise(ExternalProgram) :
 
         new_sff_name = old_sff_name.replace('-', '_')
         if new_sff_name != old_sff_name :
-            os.symlink(old_sff_name, new_sff_name)
+            try :
+                os.symlink(old_sff_name, new_sff_name)
+            except OSError :
+                pass
 
         f = open('tmp.txt', 'w')
         print >> f, "%s tmp.oligos" % new_sff_name

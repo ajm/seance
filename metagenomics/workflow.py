@@ -17,8 +17,8 @@ from metagenomics.biom import BiomFile
 class WorkFlow(object) :
     def __init__(self, options) :
         self.options = options
-        self.data_directory = options['datadir']
-        self.temp_directory = options['tempdir']
+        self.data_directory = options['sffdir']
+        self.temp_directory = options['outdir']
         self.metadata_file = options['metadata']
         self.seqdb = SequenceDB(compressed=options['compress'])
 
@@ -57,10 +57,14 @@ class WorkFlow(object) :
         if self.options['denoise'] :
             return mf
 
+        length = self.options['length'] + self.options['mid-length']
+        if self.options['clip-primer'] :
+            length += len(self.options['forward-primer'])
+
         if self.options['compress'] :
-            mf.add(CompressedLengthFilter(self.options['length']))
+            mf.add(CompressedLengthFilter(length))
         else :
-            mf.add(LengthFilter(self.options['length'] + self.options['mid-length']))
+            mf.add(LengthFilter(length))
 
         if self.options['max-homopolymer'] > 0 :
             mf.add(HomopolymerFilter(self.options['max-homopolymer']))
@@ -103,6 +107,7 @@ class WorkFlow(object) :
                 sample.preprocess_denoise(mf, 
                         self.options['length'], 
                         self.options['forward-primer'], 
+                        self.options['clip-primer'],
                         mid_errors=self.options['mid-errors'])
 
             elif self.options['compress'] :
@@ -145,7 +150,7 @@ class WorkFlow(object) :
 
     def __get_important_keys(self, duplicate_threshold, sample_threshold) :
         ref_count = collections.Counter()
-        phy_keys = []
+        phy_keys = set()
 
         # first collect keys for all sequences that fit number of reads
         for sample in self.samples :
@@ -158,9 +163,18 @@ class WorkFlow(object) :
             if freq < sample_threshold :
                 break
 
-            phy_keys.append(key)
+            phy_keys.add(key)
 
-        return phy_keys
+        # some samples contain reads you would not necessarily expect to see 
+        # in any other samples (control samples) so add these separately, but
+        # still respect duplicate_threshold
+        for sample in self.samples :
+            if sample.metadata['allow-singletons'] :
+                for key in sample.seqcounts :
+                    if self.seqdb.get(key).duplicates >= duplicate_threshold :
+                        phy_keys.add(key)
+
+        return list(phy_keys)
     
     def __write_fasta(self, keys, filename, names=None) :
         f = open(os.path.join(self.temp_directory, filename), 'w')

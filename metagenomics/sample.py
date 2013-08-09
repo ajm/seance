@@ -64,7 +64,7 @@ class Sample(object) :
 
         self.fastq.close()
     
-    def preprocess_denoise(self, filt, length, primer, mid_errors=0) :
+    def preprocess_denoise(self, filt, length, primer, clip_primer, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
         mid = GetMID(self.mid_length).run(self.fastq.get_filename())
 
@@ -73,6 +73,9 @@ class Sample(object) :
 
         for seq in self.fastq :
             if filt.accept(seq) :
+                if clip_primer :
+                    seq.remove_mid(len(primer))
+
                 self.seqcounts[self.db.put(seq)] += 1
 
         self.fastq.close()
@@ -150,15 +153,15 @@ class NematodeSample(Sample) :
         self.metadata = metadata
 
     def sample_desc(self) :
-        d = self.metadata.get('date')
+        d = self.metadata['date']
         date = '/'.join(map(str, [d.day, d.month, d.year]))
-        return ' '.join([self.metadata.get('location'), self.metadata.get('lemur'), date])
+        return ' '.join([self.metadata['location'], self.metadata['lemur'], date])
 
     def __eq__(self, other) :
-        return (self.metadata.get('location'), self.metadata.get('lemur'), self.metadata.get('date')) == \
-                (other.metadata.get('location'), other.metadata.get('lemur'), other.metadata.get('date'))
+        return (self.metadata['location'], self.metadata['lemur'], self.metadata['date']) == \
+                (other.metadata['location'], other.metadata['lemur'], other.metadata['date'])
 
     def __lt__(self, other) :
-        return (self.metadata.get('location'), self.metadata.get('lemur'), self.metadata.get('date')) < \
-                (other.metadata.get('location'), other.metadata.get('lemur'), other.metadata.get('date'))
+        return (self.metadata['location'], self.metadata['lemur'], self.metadata['date']) < \
+                (other.metadata['location'], other.metadata['lemur'], other.metadata['date'])
 

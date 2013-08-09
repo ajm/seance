@@ -9,12 +9,13 @@ from metagenomics.system import System
 
 def get_default_options() :
     return {
-            'datadir'           : None,
-            'tempdir'           : None,
+            'sffdir'           : None,
+            'outdir'           : None,
             'metadata'          : None,
 
             'denoise'           : False,
             'forward-primer'    : None,
+            'clip-primer'       : True,
 
             'compress'          : False,
 
@@ -35,7 +36,7 @@ def get_default_options() :
            }
 
 def get_mandatory_options() :
-    return ['datadir', 'tempdir', 'metadata']
+    return ['sffdir', 'outdir', 'metadata']
 
 def get_required_programs() :
     return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime', 'blastn', 'mothur']
@@ -76,13 +77,14 @@ Legal commands are %s (see below for options).
 %s assumes that the following programs are installed: %s.
     
     Mandatory:
-        -d DIR      --datadir=DIR
-        -t DIR      --tempdir=DIR
+        -s DIR      --sffdir=DIR
+        -o DIR      --outdir=DIR
         -m FILE     --metadata=FILE
 
     Preprocess options:
-        -k          --denoise               (default = %s)
+        -d          --denoise               (default = %s)
         -p SEQ      --forward-primer=SEQ    (default = %s)
+        -k          --clip-primer           (default = %s)
 
         -c          --compress              (default = %s)
 
@@ -98,7 +100,7 @@ Legal commands are %s (see below for options).
     OTU and Phylogeny options:
         -a NUM      --read-threshold=NUM    (default = %s)
         -b NUM      --sample-threshold=NUM  (default = %s)
-        -o REAL     --otu-similarity=REAL   (default = %s)
+        -t REAL     --otu-similarity=REAL   (default = %s)
 
     Misc options:
         -v          --verbose               (default = %s)
@@ -111,7 +113,8 @@ Legal commands are %s (see below for options).
         list_sentence(bold_all(get_required_programs())),
         str(options['denoise']),                 
         str(options['forward-primer']),
-        str(options['compress']),                
+        str(options['clip-primer']),
+        str(options['compress']),
         str(options['length']),
         str(options['minimum-quality']), 
         str(options['window-length']),
@@ -146,11 +149,11 @@ def parse_args(args) :
     try :
         opts,args = getopt.getopt(
                         args,
-                        "d:t:m:hnq:w:l:e:g:a:b:o:kp:cx:",
+                        "hvs:o:m:q:l:nl:e:g:a:b:t:dp:kcx:",
                         [   "help", 
                             "verbose", 
-                            "datadir=", 
-                            "tempdir=", 
+                            "sffdir=", 
+                            "outdir=", 
                             "metadata=", 
                             "min-quality=", 
                             "window-length=", 
@@ -163,6 +166,7 @@ def parse_args(args) :
                             "otu-similarity=",
                             "denoise",
                             "forward-primer=",
+                            "clip-primer",
                             "compress",
                             "homopolymer-length="
                         ]
@@ -178,11 +182,11 @@ def parse_args(args) :
             usage()
             sys.exit(0)
 
-        elif o in ('-d', '--datadir') :
-            options['datadir'] = a
+        elif o in ('-s', '--sffdir') :
+            options['sffdir'] = a
 
-        elif o in ('-t', '--tempdir') :
-            options['tempdir'] = a
+        elif o in ('-o', '--outdir') :
+            options['outdir'] = a
 
         elif o in ('-m', '--metadata') :
             options['metadata'] = a
@@ -223,11 +227,14 @@ def parse_args(args) :
         elif o in ('-v', '--verbose') :
             options['verbose'] = True
 
-        elif o in ('-k', '--denoise') :
+        elif o in ('-d', '--denoise') :
             options['denoise'] = True
 
         elif o in ('-p', '--forward-primer') :
             options['forward-primer'] = a
+
+        elif o in ('-k', '--clip-primer') :
+            options['clip-primer'] = True
 
         else :
             assert False, "unhandled option %s" % o
@@ -253,7 +260,7 @@ def check_options(options) :
     if not mandatory_options_set(options) :
         sys.exit(-1)
 
-    if False in [system.check_directories([(options['datadir'], False), (options['tempdir'], True)]), \
+    if False in [system.check_directories([(options['sffdir'], False), (options['outdir'], True)]), \
                  system.check_file(options['metadata'])] :
         sys.exit(-1)
 
@@ -294,7 +301,7 @@ def main() :
 
     system = System()
     system.check_local_installation(get_required_programs())
-    System.tempdir(options['tempdir']) # some objects need this set
+    System.tempdir(options['outdir']) # some objects need this set
 
     wf = WorkFlow(options)
     if command in ('preprocess', 'all') :
