@@ -217,7 +217,7 @@ class MetadataReader(object) :
         return self.metadata.get(key, None)
 
     def process(self) :
-        num_required_fields = 7
+        num_required_fields = 8
 
         line_num = 0
 
@@ -236,31 +236,44 @@ class MetadataReader(object) :
                          (line_num, self.metadata_fname, len(data), num_required_fields)
                 continue
 
-            # Tg_2 53 Tg_2-25062012-1 Solofo 10/11/2010 Campsite 9
-            filename = data[2] + ".sff"
-            lemurname = data[3]
-            date = self.make_date(data[4])
-            location = data[5]
+            sample_id = data[0]
+            filename = data[1] + ".sff"
+            lemurname = data[2]
+            date = self.make_date(data[3])
+            location = data[4]
             try :
-                num_eggs = data[6]
-                if num_eggs != 'NA' :
-                    num_eggs = int(data[6])
+                field = 'number of eggs'
+                value = data[5]
+                if value != 'NA' :
+                    num_eggs = int(value)
                 else :
                     num_eggs = -1
 
+                field = 'mid-length'
+                value = data[6]
+                mid_length = int(value)
+
+                field = 'include-singletons'
+                value = data[7]
+                singletons = True if int(value) != 0 else False
+
             except ValueError, ve :
                 print >> sys.stderr, \
-                         "Warning: line %d of metadata file '%s' egg field is not a number (read '%d')" % \
-                         (line_num, self.metadata_fname, data[6])
+                         "Warning: line %d of metadata file '%s' '%s' field is not a number (read '%s')" % \
+                         (line_num, self.metadata_fname, field, value)
                 continue
-            
+
+
             smd = SampleMetadata()
             
-            smd.put('file', filename)
-            smd.put('lemur', lemurname)
-            smd.put('date', date)
-            smd.put('location', location)
-            smd.put('eggs', num_eggs)
+            smd['id'] = sample_id
+            smd['file'] = filename
+            smd['lemur'] = lemurname
+            smd['date'] = date
+            smd['location'] = location
+            smd['eggs'] = num_eggs
+            smd['mid-length'] = mid_length
+            smd['include-singletons'] = singletons
 
             self.metadata[filename] = smd
             

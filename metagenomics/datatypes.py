@@ -200,11 +200,17 @@ class SampleMetadata(object) :
     def __init__(self) :
         self.data = {}
 
-    def put(self, key, value) :
-        self.data[key] = value
-
-    def get(self, key) :
+    def __getitem__(self, key) :
         return self.data[key]
+
+    def __setitem__(self, key, val) :
+        self.data[key] = val
+
+#    def put(self, key, value) :
+#        self.data[key] = value
+
+#    def get(self, key) :
+#        return self.data[key]
 
     def items(self) :
         return self.data.items()

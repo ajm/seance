@@ -43,7 +43,7 @@ class WorkFlow(object) :
                 print >> sys.stderr, "Warning: skipping %s, metadata missing..." % fname
                 continue
 
-            s = NematodeSample(sample, self.temp_directory, self.options['mid-length'], self.seqdb, mdr.get(fname))
+            s = NematodeSample(sample, self.temp_directory, self.seqdb, mdr.get(fname))
             tmp.append(s)
 
         return tmp
@@ -59,8 +59,8 @@ class WorkFlow(object) :
 
         if self.options['compress'] :
             mf.add(CompressedLengthFilter(self.options['length']))
-        else :
-            mf.add(LengthFilter(self.options['length'] + self.options['mid-length']))
+#        else :
+#            mf.add(LengthFilter(self.options['length'] + self.options['mid-length']))
 
         if self.options['max-homopolymer'] > 0 :
             mf.add(HomopolymerFilter(self.options['max-homopolymer']))
@@ -247,7 +247,7 @@ class WorkFlow(object) :
         b = BiomFile()
 
         for index, sample in enumerate(self.samples) :
-            b.add_sample(("%d " % index) + sample.sample_desc(), sample.metadata)
+            b.add_sample(("%d " % index) + sample.description(), sample.metadata)
 
         for key in clust_keys :
             b.add_otu(otu_names.get(key, "%s_unknown" % key))

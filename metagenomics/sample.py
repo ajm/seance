@@ -8,15 +8,15 @@ from functools import total_ordering
 
 from metagenomics.filetypes import SffFile, FastqFile
 from metagenomics.tools import Sff2Fastq, GetMID, Pagan, Uchime, PyroNoise
-from metagenomics.filters import Filter
+from metagenomics.filters import Filter, LengthFilter
 from metagenomics.db import SequenceDB
 
 class Sample(object) :
-    def __init__(self, sff_fname, workingdir, mid_length, seqdb) :
+    def __init__(self, sff_fname, workingdir, seqdb) :
         self.sff = SffFile(sff_fname)
         self.workingdir = workingdir
         self.fastq = None #Sff2Fastq().run(self.sff, self.workingdir)
-        self.mid_length = mid_length
+        #self.mid_length = self.metadata['mid-length']
         self.db = seqdb
         self.seqcounts = collections.Counter()
         self.chimeras = []
@@ -26,16 +26,18 @@ class Sample(object) :
 
     def preprocess(self, filt, length, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
-        mid = GetMID(self.mid_length).run(self.fastq.get_filename())
+        mid = GetMID(self.metadata['mid-length']).run(self.fastq.get_filename())
+
+        lenfilter = LengthFilter(length + self.metadata['mid-length'])
 
         self.fastq.open()
 
         for seq in self.fastq :
-            if filt.accept(seq) :
-                if self.__hamming_distance(mid, seq[:self.mid_length]) > mid_errors :
+            if filt.accept(seq) and lenfilt.accept(seq) :
+                if self.__hamming_distance(mid, seq[:self.metadata['mid-length']]) > mid_errors :
                     continue
 
-                seq.remove_mid(self.mid_length)
+                seq.remove_mid(self.metadata['mid-length'])
                 seq.truncate(length)
                 self.seqcounts[self.db.put(seq)] += 1
 
@@ -43,18 +45,18 @@ class Sample(object) :
     
     def preprocess_compress(self, filt, compressed_length, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
-        mid = GetMID(self.mid_length).run(self.fastq.get_filename())
+        mid = GetMID(self.metadata['mid-length']).run(self.fastq.get_filename())
 
         self.fastq.open()
 
         for seq in self.fastq :
             if filt.accept(seq) :
                 # ensure there are not too many errors in the mid
-                if self.__hamming_distance(mid, seq[:self.mid_length]) > mid_errors :
+                if self.__hamming_distance(mid, seq[:self.metadata['mid-length']]) > mid_errors :
                     continue
 
                 # everything else assumes the mid does not exist
-                seq.remove_mid(self.mid_length)
+                seq.remove_mid(self.metadata['mid-length'])
 
                 # the database can only handle sequences where the compressed representation of
                 # that sequence are of identical length
@@ -66,13 +68,15 @@ class Sample(object) :
     
     def preprocess_denoise(self, filt, length, primer, mid_errors=0) :
         self.fastq = Sff2Fastq().run(self.sff, self.workingdir)
-        mid = GetMID(self.mid_length).run(self.fastq.get_filename())
+        mid = GetMID(self.metadata['mid-length']).run(self.fastq.get_filename())
+
+        lenfilt = LengthFilter(length + self.metadata['mid-length'])
 
         self.fastq = PyroNoise().run(self.sff.get_filename(), primer, mid)
         self.fastq.open()
 
         for seq in self.fastq :
-            if filt.accept(seq) :
+            if filt.accept(seq) and lenfilt.accept(seq) :
                 self.seqcounts[self.db.put(seq)] += 1
 
         self.fastq.close()
@@ -145,20 +149,20 @@ class Sample(object) :
 
 @total_ordering
 class NematodeSample(Sample) :
-    def __init__(self, sff_fname, workingdir, mid_length, seqdb, metadata) :
-        super(NematodeSample, self).__init__(sff_fname, workingdir, mid_length, seqdb)
+    def __init__(self, sff_fname, workingdir, seqdb, metadata) :
+        super(NematodeSample, self).__init__(sff_fname, workingdir, seqdb)
         self.metadata = metadata
 
-    def sample_desc(self) :
-        d = self.metadata.get('date')
+    def description(self) :
+        d = self.metadata['date']
         date = '/'.join(map(str, [d.day, d.month, d.year]))
-        return ' '.join([self.metadata.get('location'), self.metadata.get('lemur'), date])
+        return ' '.join([self.metadata['location'], self.metadata['lemur'], date])
 
     def __eq__(self, other) :
-        return (self.metadata.get('location'), self.metadata.get('lemur'), self.metadata.get('date')) == \
-                (other.metadata.get('location'), other.metadata.get('lemur'), other.metadata.get('date'))
+        return (self.metadata['location'], self.metadata['lemur'], self.metadata['date']) == \
+                (other.metadata['location'], other.metadata['lemur'], other.metadata['date'])
 
     def __lt__(self, other) :
-        return (self.metadata.get('location'), self.metadata.get('lemur'), self.metadata.get('date')) < \
-                (other.metadata.get('location'), other.metadata.get('lemur'), other.metadata.get('date'))
+        return (self.metadata['location'], self.metadata['lemur'], self.metadata['date']) < \
+                (other.metadata['location'], other.metadata['lemur'], other.metadata['date'])
 

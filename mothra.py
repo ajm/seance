@@ -23,7 +23,7 @@ def get_default_options() :
             'window-length'     : None,
             'dont-remove-nbases': False,
             'mid-errors'        : 0,
-            'mid-length'        : 5,
+#            'mid-length'        : 5,
             'max-homopolymer'   : 8,
 
             'read-threshold'   : 2,
@@ -94,7 +94,6 @@ Legal commands are %s (see below for options).
         -n          --dont-remove-nbases    (default = %s)
 
         -e NUM      --mid-errors=NUM        (default = %s)
-        -g NUM      --mid-length=NUM        (default = %s)
 
     OTU and Phylogeny options:
         -a NUM      --read-threshold=NUM    (default = %s)
@@ -120,7 +119,6 @@ Legal commands are %s (see below for options).
         str(options['max-homopolymer']),
         str(options['dont-remove-nbases']), 
         str(options['mid-errors']),
-        str(options['mid-length']),              
         str(options['read-threshold']),
         str(options['sample-threshold']),  
         str(options['otu-similarity']), 
@@ -159,7 +157,7 @@ def parse_args(args) :
                             "remove-nbases", 
                             "length=",
                             "mid-errors=",
-                            "mid-length=",
+#                            "mid-length=",
                             "read-threshold=",
                             "sample-threshold=",
                             "otu-similarity=",
@@ -205,8 +203,8 @@ def parse_args(args) :
         elif o in ('-e', '--mid-errors') :
             options['mid-errors'] = expect_int("mid-errors", a)
 
-        elif o in ('-g', '--mid-length') :
-            options['mid-length'] = expect_int("mid-length", a)
+#        elif o in ('-g', '--mid-length') :
+#            options['mid-length'] = expect_int("mid-length", a)
 
         elif o in ('-a', '--read-threshold') :
             options['read-threshold'] = expect_int("read-threshold", a)
