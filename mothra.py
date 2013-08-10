@@ -31,6 +31,7 @@ def get_default_options() :
             'sample-threshold' : 2,
 
             'otu-similarity'    : 0.97,
+            'silva'             : None,
 
             'verbose'           : False
            }
@@ -101,7 +102,7 @@ Legal commands are %s (see below for options).
         -a NUM      --read-threshold=NUM    (default = %s)
         -b NUM      --sample-threshold=NUM  (default = %s)
         -t REAL     --otu-similarity=REAL   (default = %s)
-
+                    --silva=FILE
     Misc options:
         -v          --verbose               (default = %s)
         -h          --help
@@ -168,7 +169,8 @@ def parse_args(args) :
                             "forward-primer=",
                             "clip-primer",
                             "compress",
-                            "homopolymer-length="
+                            "homopolymer-length=",
+                            "silva="
                         ]
                     )
 
@@ -235,6 +237,9 @@ def parse_args(args) :
 
         elif o in ('-k', '--clip-primer') :
             options['clip-primer'] = True
+
+        elif o in ('--silva') :
+            options['silva'] = a
 
         else :
             assert False, "unhandled option %s" % o

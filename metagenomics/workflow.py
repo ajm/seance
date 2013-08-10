@@ -246,10 +246,14 @@ class WorkFlow(object) :
 
         phy_fasta = self.__write_fasta(clust_keys, "reference_phyla.fasta", otu_names)
 
-        # create a reference phylogeny
-        print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
-        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
-
+        if not self.options['silva'] :
+            # create a reference phylogeny
+            print "Aligning %s sequences with PAGAN%s ..." % (len(clust_keys), "" if len(clust_keys) < 50 else ", (this might take a while)")
+            ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
+        else :
+            print "Aligning %s sequences with PAGAN against SILVA ..." % (len(clust_keys))
+            s = self.options['silva']
+            ref_alignment,ref_tree = Pagan().silva_phylogenetic_alignment(s + '.fasta', s + '.tree', phy_fasta)
 
         # write results
         b = BiomFile()
@@ -269,6 +273,17 @@ class WorkFlow(object) :
 
         for key in clust_keys :
             b.add_otu(otu_names.get(key, "%s_unknown" % key))
+
+        if self.options['silva'] :
+            fq = FastqFile(phy_fasta + '.silva.pruned.fas')
+            fq.open()
+
+            # XXX this is not very robust
+            for seq in fq :
+                if ';' in seq.id :
+                    b.add_otu(seq.id.split(';')[-1])
+
+            fq.close()
 
         for sindex in range(len(samp)) :
             sample = samp[sindex]
