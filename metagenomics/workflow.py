@@ -254,14 +254,24 @@ class WorkFlow(object) :
         # write results
         b = BiomFile()
 
-        for index, sample in enumerate(self.samples) :
-            b.add_sample(("%d " % index) + sample.sample_desc(), sample.metadata)
+        # if a column is going to sum to 0, then it is not worth
+        # including it
+        samp = []
+        for sample in self.samples :
+            for key in clust_keys :
+                if key in sample :
+                    samp.append(sample)
+                    break
+
+        for index, sample in enumerate(samp) :
+            #b.add_sample(("%d " % index) + sample.description(), sample.metadata)
+            b.add_sample(sample.description(), sample.metadata)
 
         for key in clust_keys :
             b.add_otu(otu_names.get(key, "%s_unknown" % key))
 
-        for sindex in range(len(self.samples)) :
-            sample = self.samples[sindex]
+        for sindex in range(len(samp)) :
+            sample = samp[sindex]
             for cindex in range(len(c.clusters)) :
                 cluster = c.clusters[cindex]
                 count = 0

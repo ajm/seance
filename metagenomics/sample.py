@@ -152,10 +152,10 @@ class NematodeSample(Sample) :
         super(NematodeSample, self).__init__(sff_fname, workingdir, mid_length, seqdb)
         self.metadata = metadata
 
-    def sample_desc(self) :
+    def description(self) :
         d = self.metadata['date']
         date = '/'.join(map(str, [d.day, d.month, d.year]))
-        return ' '.join([self.metadata['location'], self.metadata['lemur'], date])
+        return ' '.join([self.metadata['id'], self.metadata['location'], self.metadata['lemur'], date])
 
     def __eq__(self, other) :
         return (self.metadata['location'], self.metadata['lemur'], self.metadata['date']) == \
