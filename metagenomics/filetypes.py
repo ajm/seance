@@ -229,6 +229,8 @@ class MetadataReader(object) :
             if line == '' :
                 continue
 
+            line = ''.join((i for i in line if ord(i) < 128))
+
             data = line.split()
             if len(data) != num_required_fields :
                 print >> sys.stderr, \

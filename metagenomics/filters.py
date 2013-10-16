@@ -22,18 +22,31 @@ class NullFilter(object) :
 class MultiFilter(Filter) :
     def __init__(self) :
         self.filters = []
+        self.counts = []
 
     def add(self, f) :
         self.filters.append(f)
+        self.counts.append(0)
 
     def accept(self, seq) :
-        for f in self.filters :
+        for index,f in enumerate(self.filters) :
             if not f.accept(seq) :
+                self.count[index] += 1
                 return False
         return True
 
+    def reset(self) :
+        for i in range(len(self.counts)) :
+            self.counts[i] = 0
+
     def __len__(self) :
         return len(self.filters)
+
+    def __str__(self) :
+        s = ""
+        for index,f in enumerate(self.filters) :
+            s += "%s %d\n" % (f.__class__.__name__, self.counts[index])
+        return s
 
 class LengthFilter(Filter) :
     def __init__(self, length) :

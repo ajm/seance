@@ -79,7 +79,7 @@ class Cluster(object) :
         #same = len(filter(lambda x: x[0] == x[1], zip(aligned[0], aligned[1])))
         leng = float(min(len(aligned[0]), len(aligned[1])))
 
-        last_gap = False
+        last_gap = True 
         diff = 0
         for c1,c2 in zip(aligned[0], aligned[1]) :
             gap = '-' in (c1,c2)
@@ -91,6 +91,9 @@ class Cluster(object) :
                 diff += 1
 
             last_gap = gap
+
+        if last_gap :
+            diff -= 1
 
         #return same / leng
         return (leng - diff) / leng

@@ -217,7 +217,7 @@ def parse_args(args) :
         elif o in ('-b', '--sample-threshold') :
             options['sample-threshold'] = expect_int("sample-threshold", a)
 
-        elif o in ('-o', '--otu-similarity') :
+        elif o in ('-t', '--otu-similarity') :
             options['otu-similarity'] = expect_float("otu-similarity", a)
 
         elif o in ('-x', '--max-homopolymer') :

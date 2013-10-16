@@ -71,14 +71,20 @@ class Sample(object) :
         self.fastq = PyroNoise().run(self.sff.get_filename(), primer, mid)
         self.fastq.open()
 
+        filt.reset()
+
         for seq in self.fastq :
             if filt.accept(seq) :
                 if clip_primer :
                     seq.remove_mid(len(primer))
 
-                self.seqcounts[self.db.put(seq)] += 1
+                self.seqcounts[self.db.put(seq)] += seq.duplicates
 
         self.fastq.close()
+
+#        print self.sff
+#        print str(filt)
+#        print ""
 
     def rebuild(self, newdb) :
         self.db = newdb
@@ -90,6 +96,9 @@ class Sample(object) :
         for seq in self.fastq :
             count = seq.duplicates
             key = seq.id
+
+            if count < 5 : # if this is the level of contamination
+                continue
 
             if key not in self.db :
                 self.db[key] = seq

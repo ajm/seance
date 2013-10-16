@@ -113,7 +113,9 @@ class Pagan(ExternalProgram) :
 
     def phylogenetic_placement(self, ref_alignment, ref_tree, queries) :
         command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s --fast-placement \
-                 --test-every-node --exhaustive-placement --one-placement-only --homopolymer --xml" #--output-nhx-tree"
+                                --test-every-node --exhaustive-placement --one-placement-only --homopolymer --xml" #--output-nhx-tree"
+        #command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s \
+        #                         --test-every-node --exhaustive-placement --one-placement-only --homopolymer --xml"
         out_fname = queries + ".placement"
 
         try :
@@ -126,9 +128,13 @@ class Pagan(ExternalProgram) :
         return out_fname + ".fas"
 
     def silva_phylogenetic_alignment(self, ref_alignment, ref_tree, queries) :
+        #command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s " + \
+        #   "--fast-placement --use-anchors --prune-extended-alignment --test-every-terminal-node " + \
+        #   "--xml --trim-extended-alignment --score-only-ungapped"
         command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s " + \
-                        "--fast-placement --use-anchors --prune-extended-alignment --test-every-terminal-node " + \
-                        "--xml --trim-extended-alignment --score-only-ungapped"
+            "--use-anchors --use-exonerate-local --test-every-terminal-node --query-distance 0.01 " + \
+            "--one-placement-only --output-nhx-tree --xml --prune-extended-alignment --trim-extended-alignment " + \
+            "--prune-keep-number 0"
 
         #out_fname = os.path.splitext(queries)[0] + ".silva"
         out_fname = queries + ".silva"
@@ -264,11 +270,18 @@ class BlastN(ExternalProgram) :
     def __get_complete_desc(self, name) :
         try :
             f = urllib2.urlopen(self.url % name)
-            return '_'.join(f.readline().split('|')[-1].strip().split()[:2]).replace('.', '') # ;-P
+            #return '_'.join(f.readline().split('|')[-1].strip().split()[:2]).replace('.', '') # ;-P
+            tmp = '_'.join(f.readline().split('|')[-1].strip().split()[:2])
+            for badchar in " \n\t:,)(;][" : # these cause problems for RaxML
+                tmp = tmp.replace(badchar, '')
+            return tmp
+        
         except urllib2.HTTPError, he :
-            print >> sys.stderr, "Error: could not communicate with eutils.ncbi.nlm.nih.gov for %s : %s" % (name, str(he))
+            #print >> sys.stderr, "Error: could not communicate with eutils.ncbi.nlm.nih.gov for %s : %s" % (name, str(he))
             #sys.exit(-1)
-            return name
+            #return name
+            print >> sys.stderr, "Error: querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he))
+            return self.__get_complete_desc(name)
 
     def get_names(self, fasta_fname) :
         s,o = commands.getstatusoutput(self.command % fasta_fname)
@@ -306,7 +319,7 @@ class BlastN(ExternalProgram) :
 class PyroNoise(ExternalProgram) :
     def __init__(self) :
         super(PyroNoise, self).__init__('PyroNoise')
-        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0)\" &> /dev/null"
+        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0, minflows=360)\" &> /dev/null"
         # TODO remove bdiff (default is zero anyway)
         # TODO remove maxhomop (add to my code)
 

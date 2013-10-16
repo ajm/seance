@@ -4,7 +4,7 @@ import glob
 import collections
 
 from metagenomics.sample import NematodeSample
-from metagenomics.filetypes import MetadataReader, DataFileError
+from metagenomics.filetypes import MetadataReader, DataFileError, FastqFile
 from metagenomics.datatypes import SampleMetadata
 from metagenomics.filters import *
 from metagenomics.db import SequenceDB
@@ -95,6 +95,17 @@ class WorkFlow(object) :
 
         p.end()
 
+#        f = open('entire_db.fasta', 'w')
+#        for k,v in self.seqdb.iteritems() :
+#            try :
+#                print >> f, v.fasta()
+#            except :
+#                print type(k), k
+#                print type(v), v
+#                print ""
+#        f.close()
+#        sys.exit(1)
+
     def preprocess(self) :
         mf = self.__build_filter()
 
@@ -170,9 +181,13 @@ class WorkFlow(object) :
         # still respect duplicate_threshold
         for sample in self.samples :
             if sample.metadata['allow-singletons'] :
+                print "allowing singletons for (%s)" % sample.description(),
+                count = 0
                 for key in sample.seqcounts :
                     if self.seqdb.get(key).duplicates >= duplicate_threshold :
                         phy_keys.add(key)
+                        count += 1
+                print "- added %d sequences" % count
 
         return list(phy_keys)
     
@@ -262,10 +277,20 @@ class WorkFlow(object) :
         # including it
         samp = []
         for sample in self.samples :
-            for key in clust_keys :
+            for key in phy_keys :
                 if key in sample :
                     samp.append(sample)
                     break
+
+        print "out of %d samples %d included in heatmap" % (len(self.samples), len(samp))
+
+#        for i in self.samples :
+#            print i
+#
+#        print "==="
+#
+#        for i in samp :
+#            print i
 
         for index, sample in enumerate(samp) :
             #b.add_sample(("%d " % index) + sample.description(), sample.metadata)
@@ -285,15 +310,38 @@ class WorkFlow(object) :
 
             fq.close()
 
+        # XXX PRINT EVERYTHING
+        for cindex in range(len(c.clusters)) :
+            cluster = c.clusters[cindex]
+            key = clust_keys[cindex]
+            cluster_label = otu_names.get(key, "%s_unknown" % key)
+
+            f = open(os.path.join(self.temp_directory, "cluster_%s.fasta" % (cluster_label)), 'w')
+            for read in cluster :
+                print >> f, self.seqdb.get(read).fasta().rstrip()
+            f.close()
+        # XXX /PRINT EVERYTHING
+
         for sindex in range(len(samp)) :
             sample = samp[sindex]
             for cindex in range(len(c.clusters)) :
                 cluster = c.clusters[cindex]
                 count = 0
+
+                key = clust_keys[cindex]
+                sample_label = "%s-%s_%s" % (sample.metadata['location'], sample.metadata['lemur'], sample.metadata['file'].split('-')[0])
+                sample_label = "%s" % sample.metadata['id']
+                cluster_label = otu_names.get(key, "%s_unknown" % key)
+
+                f = open(os.path.join(self.temp_directory, "sample_%s_cluster_%s.fasta" % (sample_label, cluster_label)), 'w')
                 for read in cluster :
                     if read in sample :
                         count += sample.seqcounts[read]
+                        #print >> f, self.seqdb.get(read).fasta().rstrip()
+                        current = self.seqdb.get(read)
+                        print >> f, ">%s NumDuplicates=%d\n%s" % (current.id, sample.seqcounts[read], current.sequence)
 
+                f.close()
                 b.add_quantity(cindex, sindex, count)
 
         b.write_to(os.path.join(self.temp_directory, "reference_phyla.biom"))

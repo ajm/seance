@@ -25,10 +25,10 @@ class BiomFile(object) :
             return "null"
         tmp = {}
         md = self.metadata[sample_name]
-        tmp["Date"] = str(md.get("date"))
-        tmp["Lemur"] = md.get("lemur")
-        tmp["Location"] = md.get("location")
-        tmp["Eggs"] = str(md.get("eggs"))
+        tmp["Date"] = str(md["date"])
+        tmp["Lemur"] = md["lemur"]
+        tmp["Location"] = md["location"]
+        tmp["Eggs"] = str(md["eggs"])
         return "{ " + ", ".join(map(lambda x: "%s : %s" % (repr(x[0]).replace("'","\""), repr(x[1]).replace("'","\"")), tmp.items())) + " }"
 
     def write_to(self, filename) :
