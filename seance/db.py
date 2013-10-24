@@ -6,15 +6,16 @@ import os
 
 from functools import total_ordering
 
-from metagenomics.datatypes import Sequence, SequenceError, IUPAC
-from metagenomics.tools import Pagan, Aligner1D
-from metagenomics.system import System
-from metagenomics.progress import Progress
+from seance.datatypes import Sequence, SequenceError, IUPAC
+from seance.tools import Pagan, Aligner1D
+from seance.system import System
+from seance.progress import Progress
+
 
 class SequenceDB(object) :
-    def __init__(self, compressed) :
-        if compressed :
-            self._db = CompressedSequenceDict()
+    def __init__(self, preprocessed=False) :
+        if preprocessed :
+            self._db = WrapperDict()
         else :
             self._db = SequenceDict()
 
@@ -24,11 +25,11 @@ class SequenceDB(object) :
     def get(self, key) :
         return self._db.get(key)
 
-    def debug(self) :
-        self._db.debug()
-
-    def finalise(self, length) :
-        self._db.finalise(length)
+#    def debug(self) :
+#        self._db.debug()
+#
+#    def finalise(self, length) :
+#        self._db.finalise(length)
 
     def print_database(self, fname) :
         self._db.print_database(fname)
@@ -94,6 +95,21 @@ class SequenceDict(object) :
     def __str__(self) :
         return "%s: added = %d, unique = %d" % \
                 (type(self).__name__, self.count, len(self))
+
+class WrapperDict(dict) :
+    def __init__(self) :
+        super(WrapperDict, self).__init__()
+
+    def put(self, seq) :
+        key = seq.id
+        count = seq.duplicates
+
+        if self.has_key(key) :
+            self.__getitem__(key).duplicates += count
+        else :
+            self.__setitem__(key, seq)
+
+        return key
 
 class CompressedSequenceDict(object) :
     def __init__(self) :

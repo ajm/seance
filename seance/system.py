@@ -2,14 +2,16 @@ import sys
 import os
 import tempfile
 import multiprocessing
+import logging
 
-from metagenomics.tools import ExternalProgram
+from seance.tools import ExternalProgram
+
 
 class System(object) :
     __tmpdir__ = None
 
     def __init__(self) :
-        pass
+        self.log = logging.getLogger('seance')
 
     @staticmethod
     def tempdir(tmpdir=None) :
@@ -33,21 +35,25 @@ class System(object) :
 
         # ensure required programs are installed locally
         for prog in required_programs :
-            if not ExternalProgram.exists(prog) :
-                print >> sys.stderr, "Error: '%s' is not installed." % prog
+            path = ExternalProgram.get_path(prog)
+
+            if path != None :
+                self.log.info("found %s @ %s" % (prog, path))
+            else :
+                self.log.error("%s is not installed" % prog)
                 bad = True
 
         if bad :
-            print >> sys.stderr, "Error: Exiting due to required external programs not being installed..."
-            sys.exit(-1)
+            self.log.error("Exiting due to required external programs not being installed...")
+            sys.exit(1)
 
     def check_file(self, filename) :
         if not os.path.exists(filename) :
-            print >> sys.stderr, "Error: '%s' does not exist." % filename
+            self.log.error("%s does not exist" % filename)
             return False
 
         if not os.path.isfile(filename) :
-            print >> sys.stderr, "Error: '%s' exists, but is not a file!" % filename
+            self.log.error("%s exists, but is not a file" % filename)
             return False
 
         return True
@@ -55,22 +61,27 @@ class System(object) :
     def check_directory(self, dirname, create=False) :
         if not os.path.exists(dirname) :
             if create :
-                print >> sys.stderr, "Info: '%s' does not exist, creating..." % dirname
+                self.log.info("%s does not exist, creating..." % dirname)
                 try :
                     os.makedirs(dirname)
+                    return True
+
                 except OSError, ose :
-                    print >> sys.stderr, str(ose)
+                    self.log.error(str(ose))
                     return False
             else :
-                print >> sys.stderr, "Error: '%s' does not exist." % dirname
+                self.log.error("%s does not exist" % dirname)
                 return False
 
         elif not os.path.isdir(dirname) :
-            print >> sys.stderr, "Error: '%s' exists, but is not a directory!" % dirname
+            self.log.error("%s exists, but is not a directory" % dirname)
             return False
 
         else :
             return True
+
+    def check_files(self, filenames) :
+        return False not in map(lambda x : self.check_file(x), filenames)
 
     def check_directories(self, dirs) :
         return False not in map(lambda x : self.check_directory(x[0], x[1]), dirs)
@@ -83,10 +94,9 @@ class System(object) :
         bad = False
         for i in range(len(retcodes)) :
             if retcodes[i] != 0 :
-                print >> sys,stderr, "Error: '%s' failed" % commands[i]
+                self.log.error("%s failed" % commands[i])
                 bad = True
 
         if bad :
-            sys.exit(-1)
-
+            sys.exit(1)
 

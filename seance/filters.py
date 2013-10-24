@@ -1,6 +1,7 @@
 import sys
 import abc
 import operator
+import logging
 
 class FilterError(Exception) :
     pass
@@ -31,7 +32,7 @@ class MultiFilter(Filter) :
     def accept(self, seq) :
         for index,f in enumerate(self.filters) :
             if not f.accept(seq) :
-                self.count[index] += 1
+                self.counts[index] += 1
                 return False
         return True
 
@@ -46,35 +47,36 @@ class MultiFilter(Filter) :
         s = ""
         for index,f in enumerate(self.filters) :
             s += "%s %d\n" % (f.__class__.__name__, self.counts[index])
-        return s
+        return s[:-1]
 
 class LengthFilter(Filter) :
     def __init__(self, length) :
         if length < 0 :
             raise FilterError, "%s: length is negative (%d)" % (type(self).__name__, length)
 
+        logging.getLogger('seance').info("created LengthFilter(length=%d)" % (length))
         self.length = length
 
     def accept(self, seq) :
-        return len(seq) > self.length
+        #if self.start != 0 :
+        #    seq.remove_mid(self.start)
 
-class CompressedLengthFilter(LengthFilter) :
-    def __init__(self, length) :
-        super(CompressedLengthFilter, self).__init__(length) 
+        if len(seq) >= self.length :
+            seq.truncate(self.length)
+            return True
 
-    def accept(self, seq) :
-        if len(seq.compressed) < self.length :
-            return False
-
-        #seq.ctruncate(self.length)
-        return True
+        return False
 
 class AmbiguousFilter(Filter) :
+    def __init__(self) :
+        logging.getLogger('seance').info("created AmbiguousFilter()")
+
     def accept(self, seq) :
         return 'N' not in seq
 
 class AverageQualityFilter(Filter) :
     def __init__(self, qual) :
+        logging.getLogger('seance').info("created AverageQualityFilter(qual=%d)" % (qual))
         self.qual = qual
 
     def accept(self, seq) :
@@ -83,6 +85,7 @@ class AverageQualityFilter(Filter) :
 
 class WindowedQualityFilter(Filter) :
     def __init__(self, qual, winlen) :
+        logging.getLogger('seance').info("created WindowedQualityFilter(qual=%d, winlen=%d)" % (qual, winlen))
         self.qual = qual
         self.winlen = winlen
 
@@ -105,6 +108,7 @@ class WindowedQualityFilter(Filter) :
 
 class HomopolymerFilter(Filter) :
     def __init__(self, maxlen) :
+        logging.getLogger('seance').info("created HomopolymerFilter(maxlen=%d)" % (maxlen))
         self.maxlen = maxlen
 
     def accept(self, seq) :
@@ -123,10 +127,18 @@ class HomopolymerFilter(Filter) :
 
         return True
 
-class MIDHomopolymer(Filter) :
-    def __init__(self, reject=True) :
-        self.op = operator.ne if reject else operator.eq
+class MidFilter(Filter) :
+    def __init__(self, mid, miderr) :
+        logging.getLogger('seance').info("created MidErrorFilter(mid=%s, miderr=%d)" % (mid, miderr))
+        self.mid = mid
+        self.midlen = len(mid)
+        self.miderr = miderr
+
+    def _hamming(self, mid, seq) :
+        return len(filter(lambda x: x[0] != x[1], zip(mid, seq)))
 
     def accept(self, seq) :
-        return self.op(seq[9], seq[10])
+        seqmid = seq.sequence[:self.midlen]
+        seq.remove_mid(self.midlen)
+        return self._hamming(self.mid, seqmid) <= self.miderr
 

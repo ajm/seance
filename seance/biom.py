@@ -8,10 +8,17 @@ class BiomFile(object) :
         self.otus = []
         self.data = []
 
+    def set_samples(self, sample_list) :
+        self.samples = [ s.description() for s in sample_list ]
+        self.metadata = dict(zip(self.samples, [ s.metadata for s in sample_list ]))
+
     def add_sample(self, sample_name, sample_metadata=None) :
         self.samples.append(sample_name)
         if sample_metadata :
             self.metadata[sample_name] = sample_metadata
+
+    def set_otus(self, otu_list) :
+        self.otus = otu_list
 
     def add_otu(self, otu_name) :
         self.otus.append(otu_name)

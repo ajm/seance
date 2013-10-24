@@ -2,8 +2,10 @@ import sys
 import os
 import re
 import datetime
+import logging
 
-from metagenomics.datatypes import Sequence, SampleMetadata, IUPAC
+from seance.datatypes import Sequence, SampleMetadata, IUPAC
+
 
 class DataFileError(Exception):
     pass
@@ -212,9 +214,11 @@ class MetadataReader(object) :
     def __init__(self, metadata_fname) :
         self.metadata_fname = metadata_fname
         self.metadata = {}
+        self.log = logging.getLogger('seance')
 
     def get(self, key) :
-        return self.metadata.get(key, None)
+        new_key = key.split('.')[0]
+        return self.metadata.get(new_key, None)
 
     def process(self) :
         num_required_fields = 7
@@ -233,14 +237,13 @@ class MetadataReader(object) :
 
             data = line.split()
             if len(data) != num_required_fields :
-                print >> sys.stderr, \
-                         "Warning: line %d of metadata file '%s' contains %d fields, expected %d" % \
-                         (line_num, self.metadata_fname, len(data), num_required_fields)
+                self.log.warn("line %d of metadata file '%s' contains %d fields, expected %d" % \
+                         (line_num, self.metadata_fname, len(data), num_required_fields))
                 continue
 
             # Tg_2 53 Tg_2-25062012-1 Solofo 10/11/2010 Campsite 9
             sample_id = data[0]
-            filename = data[1] + ".sff"
+            filename = data[1] #+ ".sff"
             lemurname = data[2]
             date = self.make_date(data[3])
             location = data[4]

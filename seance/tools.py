@@ -4,8 +4,12 @@ import os
 import commands
 import re
 import urllib2
+import logging
+import glob
 
-from metagenomics.filetypes import SffFile, FastqFile
+from os.path import abspath, join
+from seance.filetypes import SffFile, FastqFile
+
 
 class ExternalProgramError(Exception) :
     pass
@@ -18,20 +22,29 @@ class ExternalProgram(object) :
 
     def __init__(self, pname) :
         self.programname = pname
+        self.log = logging.getLogger('seance')
     
     @staticmethod
     def exists(programname) :
+        return ExternalProgram.get_path(programname) != None
+    
+    @staticmethod
+    def get_path(programname) :
         for p in os.environ['PATH'].split(os.pathsep) :
             progpath = os.path.join(p, programname)
             if os.path.isfile(progpath) :
                 # there may be another executable with the correct
                 # permissions lower down in the path, but the shell
                 # would not find it, so just return here...
-                return os.access(progpath, os.X_OK) 
+                if os.access(progpath, os.X_OK) :
+                    return progpath
+                else :
+                    return None
         
-        return False
+        return None
     
     def system(self, command) :
+        self.log.debug(command)
         retcode = os.system(command) 
         if retcode != 0 :
             raise ExternalProgramError("'%s' return code %d" % (command, retcode))
@@ -42,18 +55,19 @@ class Sff2Fastq(ExternalProgram) :
         self.command = "sff2fastq -o %s %s 2> /dev/null"
 
     def run(self, sff, outdir) :
- 
         if not isinstance(sff, SffFile) :
             raise ExternalProgramError("argument is not an SffFile")
 
         fastq_fname = outdir + os.sep + sff.get_basename() + ".fastq"
 
+        self.log.info("running sff2fastq (%s, %s)" % (sff.get_filename(), fastq_fname))
+
         try :
             self.system(self.command % (fastq_fname, sff.get_filename()))
         
         except ExternalProgramError, epe :
-            print >> sys.stderr, "Error: " + str(epe)
-            sys.exit(-1)
+            self.log.error(str(epe))
+            sys.exit(1)
         
         return FastqFile(fastq_fname)
 
@@ -241,7 +255,7 @@ class Uchime(ExternalProgram) :
             if data[16] == 'Y' :
                 # data[1] = "seqXXX/ab=YYY"
                 #seqid = int(data[1].split('/')[0][3:])
-                seqid = data[1].split('/')[0]
+                seqid = int(data[1].split('/')[0])
                 tmp.append(seqid)
 
         f.close()
@@ -255,10 +269,10 @@ class Uchime(ExternalProgram) :
             self.system(self.command % (fname, out_fname))
 
         except ExternalProgramError, epe :
-            print >> sys.stderr, "Error: " + str(epe)
-            sys.exit(-1)
+            self.log.error(str(epe))
+            sys.exit(1)
 
-        
+        print "parsing %s" % out_fname
         return self.__parse(out_fname)
 
 class BlastN(ExternalProgram) :
@@ -277,17 +291,15 @@ class BlastN(ExternalProgram) :
             return tmp
         
         except urllib2.HTTPError, he :
-            #print >> sys.stderr, "Error: could not communicate with eutils.ncbi.nlm.nih.gov for %s : %s" % (name, str(he))
-            #sys.exit(-1)
-            #return name
-            print >> sys.stderr, "Error: querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he))
+            self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
             return self.__get_complete_desc(name)
 
     def get_names(self, fasta_fname) :
         s,o = commands.getstatusoutput(self.command % fasta_fname)
         
         if s != 0 :
-            raise ExternalProgramError("blastn returned %d" % s)
+            self.log.error("blastn returned %d" % s)
+            sys.exit(1)
 
         names = {}
 
@@ -319,11 +331,18 @@ class BlastN(ExternalProgram) :
 class PyroNoise(ExternalProgram) :
     def __init__(self) :
         super(PyroNoise, self).__init__('PyroNoise')
-        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=8, pdiffs=2, bdiffs=0, minflows=360)\" &> /dev/null"
-        # TODO remove bdiff (default is zero anyway)
-        # TODO remove maxhomop (add to my code)
+        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=%d, pdiffs=2, bdiffs=%d, minflows=360)\" &> /dev/null"
 
-    def run(self, sff_name, forward_primer, barcode) :
+    def delete_intermediates(self, prefix) :
+        suffix = ['.fasta', '.flow', '.flow.files', '.qual', '.scrap.flow', '.summary', '.trim.flow']
+        files = ['tmp.oligos', 'tmp.txt', 'not found.shhh.fasta', 'not found.shhh.names'] + glob.glob("mothur.*.logfile")
+        for f in [ prefix + i for i in suffix ] + files :
+            try :
+                os.remove(f)
+            except OSError :
+                pass
+
+    def run(self, sff, outdir, forward_primer, barcode, barcode_errors, max_homopolymers) :
         # 1. ensure SFF file name does not contain hyphens
         # 2. write singular.txt
         #   eg: Tg_2_25062012_1.sff singular.oligos
@@ -334,41 +353,52 @@ class PyroNoise(ExternalProgram) :
         # 5. output : singular.singular.fasta   - rename
         #             singular.singular.groups  - kill
         #             singular.singular.names   - kill
+        
+        if not isinstance(sff, SffFile) :
+            raise ExternalProgramError("argument is not an SffFile")
+
         cwd = os.getcwd()
-        os.chdir(os.path.dirname(sff_name))
-        old_sff_name = os.path.basename(sff_name)
+        
+        old_sff_name = abspath(sff.get_filename())
+        new_sff_name = sff.get_basename().replace('-', '_')
+        output_name = abspath(join(outdir, sff.get_basename() + '.fasta'))
+        sff_prefix,sff_ext = os.path.splitext(new_sff_name)
 
-        new_sff_name = old_sff_name.replace('-', '_')
-        if new_sff_name != old_sff_name :
-            try :
-                os.symlink(old_sff_name, new_sff_name)
-            except OSError :
-                pass
+        os.chdir(outdir)
 
+        #print os.getcwd()
+        #print old_sff_name
+        #print new_sff_name        
+
+        try :
+            os.symlink(old_sff_name, new_sff_name)
+        except OSError :
+            pass
+            #print >> sys.stderr, "could not create symlink"
+
+        # create batch file
         f = open('tmp.txt', 'w')
         print >> f, "%s tmp.oligos" % new_sff_name
         f.close()
 
+        # create oligos file
         f = open('tmp.oligos', 'w')
         print >> f, "forward %s" % forward_primer
         print >> f, "barcode %s %s" % (barcode, new_sff_name)
         f.close()
 
-        if os.system(self.command) != 0 :
-            open(old_sff_name + '.fasta', 'w').close()
+        # run mothur
+        if os.system(self.command % (max_homopolymers, barcode_errors)) != 0 :
+            # mothur segfaults on empty files (or is it files where nothing
+            # passes qc?), just create an empty file and return
+            open(output_name, 'w').close()
             os.remove(new_sff_name)
+            self.delete_intermediates(sff_prefix)
             os.chdir(cwd)
-            return FastqFile(sff_name + '.fasta')
+            return FastqFile(output_name)
 
-        os.rename('tmp.tmp.fasta', old_sff_name + ".fasta")
-
-        # TODO there are tonnes more files to be removed new_sff_name*
-        files = [new_sff_name, 'tmp.txt', 'tmp.oligos']
-        for fname in files :
-            try :
-                os.remove(fname)
-            except OSError, ose :
-                pass
+        # rename to what we want to call it
+        os.rename('tmp.tmp.fasta', output_name)
 
         # 6.
         # merge output files to get number of duplicates 
@@ -389,7 +419,36 @@ class PyroNoise(ExternalProgram) :
         f.close()
         out_fasta.close()
 
+        self.delete_intermediates(sff_prefix)
         os.chdir(cwd)
 
         return FastqFile(sff_name + '.fasta')
+
+class Cutadapt(ExternalProgram) :
+    def __init__(self) :
+        super(Cutadapt, self).__init__('cutadapt')
+
+    def run(self, fastq, outdir, forwardprimer, reverseprimer) :
+        command = "cutadapt"
+
+        if (forwardprimer == None) and (reverseprimer == None) :
+            return fastq
+
+        if forwardprimer != None :
+            command += (" -b %s" % forwardprimer)
+
+        if reverseprimer != None :
+            command += (" -a %s" % reverseprimer)
+
+        outfile = "%s.adaptortrim" % os.path.join(outdir, fastq.get_basename())
+        command += (" %s > %s 2> /dev/null" % (fastq.get_filename(), outfile))
+
+        try :
+            self.system(command)
+
+        except ExternalProgramError, epe :
+            self.log.error(str(epe))
+            sys.exit(1)
+
+        return FastqFile(outfile)
 

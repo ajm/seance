@@ -48,30 +48,30 @@ class Sequence(object) :
                     (len(self.sequence), len(self.qual_str)))
 
         self.qualities = self.__generate_quals(qual_str)
-        self.compressed = self.__compress(self.sequence)
+        #self.compressed = self.__compress(self.sequence)
         self.duplicates = 1
         self.id = None
 
-    def __compress(self, seq) :
-        tmp = seq[0]
+#    def __compress(self, seq) :
+#        tmp = seq[0]
+#
+#        for i in seq[1:] :
+#            if tmp[-1] != i :
+#                tmp += i
+#
+#        return tmp
 
-        for i in seq[1:] :
-            if tmp[-1] != i :
-                tmp += i
-
-        return tmp
-
-    def __compress2(self, seq, length) :
-        ctmp = stmp = seq[0]
-
-        for i in seq[1:] :
-            stmp += i
-            if ctmp[-1] != i :
-                ctmp += i
-            if len(ctmp) == length :
-                break
-
-        return ctmp, stmp
+#    def __compress2(self, seq, length) :
+#        ctmp = stmp = seq[0]
+#
+#        for i in seq[1:] :
+#            stmp += i
+#            if ctmp[-1] != i :
+#                ctmp += i
+#            if len(ctmp) == length :
+#                break
+#
+#        return ctmp, stmp
 
     def __generate_quals(self, qual_str) :
         if qual_str is None :
@@ -81,25 +81,25 @@ class Sequence(object) :
 
     def truncate(self, length) :
         self.sequence = self.sequence[:length]
-        self.compressed = self.__compress(self.sequence)
+        #self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
             self.qual_str = self.qual_str[:length]
             self.qualities = self.qualities[:length]
 
-    def ctruncate(self, length) :
-        self.compressed, self.sequence = self.__compress2(self.sequence, length)
-        
-        if self.qual_str :
-            self.qual_str = self.qual_str[:len(self.sequence)]
-            self.qualities = self.qualities[:len(self.sequence)]
+#    def ctruncate(self, length) :
+#        self.compressed, self.sequence = self.__compress2(self.sequence, length)
+#        
+#        if self.qual_str :
+#            self.qual_str = self.qual_str[:len(self.sequence)]
+#            self.qualities = self.qualities[:len(self.sequence)]
 
     def rtrim(self, char='-') :
         self.truncate(len(self.sequence.rstrip(char)))
 
     def ltrim(self, char='-') :
         self.sequence = self.sequence.lstrip(char)
-        self.compressed = self.__compress(self.sequence)
+        #self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
             tmp = len(self.qual_str) - len(self.sequence)
@@ -108,7 +108,7 @@ class Sequence(object) :
 
     def remove_mid(self, mid_length) :
         self.sequence = self.sequence[mid_length:]
-        self.compressed = self.__compress(self.sequence)
+        #self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
             self.qual_str = self.qual_str[mid_length:]
@@ -175,13 +175,13 @@ class Sequence(object) :
         return repr(self.sequence)
 
     def fasta(self, duplabel=' NumDuplicates') :
-        return ">%s%s=%d\n%s\n" % (self.id, duplabel, self.duplicates, self.sequence)
+        return ">%s%s=%d\n%s" % (self.id, duplabel, self.duplicates, self.sequence)
 
     def fastq(self, duplabel=' NumDuplicates') :
         if not self.qual_str :
             raise Exception('cannot print as fastq, no qualities present')
 
-        return "@%s+\n%s\n" % (self.fasta(duplabel)[1:], self.qual_str)
+        return "@%s\n+\n%s" % (self.fasta(duplabel)[1:], self.qual_str)
 
     def __str__(self) :
         raise Exception
