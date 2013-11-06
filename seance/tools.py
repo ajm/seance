@@ -75,6 +75,7 @@ class GetMID(object) :
     def __init__(self, length) :
         self.length = length
         self.command = "grep -B1 \"^+\" %s | grep -v \"^[+-]\" | awk '{ print substr($0, 0, " + str(self.length) + ") }' | sort | uniq -c | sort -g | tail -1 | awk '{ print $2 }'"
+        self.log = logging.getLogger('seance')
 
     def run(self, fastq_name) :
         status,output = commands.getstatusoutput(self.command % fastq_name)
@@ -90,13 +91,29 @@ class GetMID(object) :
             return output
 
         if re.match("[GATC]{%d}" % self.length, output) == None :
-            raise ExternalProgramError("%s: %s does not look like a MID" % (type(self).__name__, output))
+            self.log.error("%s does not look like a MID" % (output))
+            sys.exit(1)
+            #raise ExternalProgramError("%s: %s does not look like a MID" % (type(self).__name__, output))
 
         return output
 
 class Pagan(ExternalProgram) :
     def __init__(self) :
         super(Pagan, self).__init__('pagan')
+
+    def get_alignment(self, fasta_fname) :
+        command = "pagan --use-consensus --use-duplicate-weights --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
+        out_fname = fasta_fname + ".out"
+
+        try :
+            self.system(command % (fasta_fname, out_fname))
+
+        except ExternalProgramError, epe :
+            self.log.error(str(epe))
+            sys.exit(1)
+
+        # pagan always adds '.fas'
+        return FastqFile(out_fname + ".fas")
 
     def get_454_alignment(self, fasta_fname) :
         command = "pagan --use-consensus --use-duplicate-weights --homopolymer --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
@@ -106,8 +123,8 @@ class Pagan(ExternalProgram) :
             self.system(command % (fasta_fname, out_fname))
 
         except ExternalProgramError, epe :
-            print >> sys.stderr, "Error: " + str(epe)
-            sys.exit(-1)
+            self.log.error(str(epe))
+            sys.exit(1)
         
         # pagan always adds '.fas'
         return FastqFile(out_fname + ".fas")
@@ -120,8 +137,8 @@ class Pagan(ExternalProgram) :
             self.system(command % (fasta_fname, out_fname))
 
         except ExternalProgramError, epe :
-            print >> sys.stderr, "Error: " + str(epe)
-            sys.exit(-1)
+            self.log.error(str(epe))
+            sys.exit(1)
 
         return out_fname + ".fas", out_fname + ".tre"
 
@@ -136,8 +153,8 @@ class Pagan(ExternalProgram) :
             self.system(command % (ref_alignment, ref_tree, queries, out_fname))
 
         except ExternalProgramError, epe :
-            print >> sys.stderr, "Error: " + str(epe)
-            sys.exit(-1)
+            self.log.error(str(epe))
+            sys.exit(1)
 
         return out_fname + ".fas"
 
@@ -157,8 +174,8 @@ class Pagan(ExternalProgram) :
             self.system(command % (ref_alignment, ref_tree, queries, out_fname))
 
         except ExternalProgramError, epe :
-            print >> sys.stderr, "Error: " + str(epe)
-            sys.exit(-1)
+            self.log.error(str(epe))
+            sys.exit(1)
 
         return out_fname + ".pruned.fas", out_fname + ".pruned.tre"
 
@@ -272,7 +289,6 @@ class Uchime(ExternalProgram) :
             self.log.error(str(epe))
             sys.exit(1)
 
-        print "parsing %s" % out_fname
         return self.__parse(out_fname)
 
 class BlastN(ExternalProgram) :
@@ -314,7 +330,7 @@ class BlastN(ExternalProgram) :
                 desc = fields[1].split('|')
 
             except IndexError :
-                print >> sys.stderr, "Error: could not split line from blastn: %s" % str(fields)
+                self.log.warn("could not split line from blastn: %s" % str(fields))
                 continue
 
             if re.match(".+\.\d+", desc[3]) :

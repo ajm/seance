@@ -3,18 +3,22 @@ import os
 import getopt
 import logging
 
-from os.path import splitext
+from os.path import splitext, join
 
 from seance.workflow import WorkFlow
 from seance.system import System
 
 
 verbose_level = logging.DEBUG # logging.INFO
+default_dir = './out_dir'
+default_prefix = join(default_dir, 'seance')
 
 def get_default_options() :
+    global default_dir
+
     return {
             'input-files'       : [],
-            'outdir'            : 'out_dir',
+            'outdir'            : default_dir,
             'metadata'          : None,
 
             'denoise'           : False,
@@ -36,8 +40,16 @@ def get_default_options() :
             'contamination-threshold'   : 0,
             'otu-similarity'            : 0.97,
             'blast-centroids'           : False,
+            'no-homopolymer-correction' : False,
 
             'silva-prefix'      : None,
+
+            'output-prefix'     : default_prefix,
+            'cluster-fasta'     : default_prefix + '.clusters.fasta',
+            'cluster-biom'      : default_prefix + '.clusters.biom',
+            'phylogeny-fasta'   : default_prefix + '.phylogeny.fasta',
+            'phylogeny-tree'    : default_prefix + '.phylogeny.tree',
+
             'verbose'           : False
            }
 
@@ -130,14 +142,19 @@ Legal commands are %s (see below for options).
         -c NUM      --contamination=NUM     (default = %s)
         -t REAL     --similarity=REAL       (default = %s)
                     --blastcentroids        (default = %s)
+                    --nohomopolymer         (default = %s)
+                    --output=FILEPREFIX     (default = %s)
 
     Phylogeny options:
         -o DIR      --outdir=DIR            (default = %s)
         -m FILE     --metadata=FILE         (default = %s)
-        -s FILE     --silva=FILE            (default = %s)
+                    --clusters=FILE         (default = %s)
+        -s FILE     --silva=FILEPREFIX      (default = %s)
+                    --output=FILEPREFIX     (default = %s)
 
     Heatmap options:
-        -x XXX      --XXX=xxx
+                    --biom=FILE             (default = %s)
+                    --tree=FILE             (default = %s)
 
     Misc options:
         -v          --verbose               (default = %s)
@@ -167,9 +184,15 @@ Legal commands are %s (see below for options).
         str(options['contamination-threshold']),
         str(options['otu-similarity']),
         str(options['blast-centroids']),
+        str(options['no-homopolymer-correction']),
+        str(options['output-prefix']),
         str(options['outdir']),
         str(options['metadata']),
+        str(options['cluster-fasta']),
         str(options['silva-prefix']),
+        str(options['output-prefix']),
+        str(options['cluster-biom']),
+        str(options['phylogeny-tree']),
         str(options['verbose'])
       )
 
@@ -253,7 +276,8 @@ def parse_args(args) :
                             "verbose",
                             "help",
                             "blastcentroids",
-                            "chimeras"
+                            "chimeras",
+                            "nohomopolymer"
                         ]
                     )
 
@@ -330,6 +354,9 @@ def parse_args(args) :
         elif o in ('--chimeras') :
             options['chimeras'] = True
 
+        elif o in ('--nohomopolymer') :
+            options['no-homopolymer-correction'] = True
+
         else :
             assert False, "unhandled option %s" % o
 
@@ -382,10 +409,12 @@ def check_options(command, options) :
             sys.exit(1)
 
     elif command == 'phylogeny' :
-        pass
+        if not system.check_file(options['cluster-fasta']) :
+            sys.exit(1)
 
     elif command == 'heatmap' :
-        pass
+        if not system.check_files([options['cluster-biom'], options['phylogeny-tree']]) :
+            sys.exit(1)
 
 def main() :
     if (len(sys.argv) < 2) or (sys.argv[1] in ('-h', '--help', 'help')) :

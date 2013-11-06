@@ -203,13 +203,13 @@ class WorkFlow(object) :
 
         # clustering
         c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['verbose'])
-        c.create_clusters(keys=input_keys)
+        c.create_clusters(keys=input_keys, homopolymer_correction=not self.options['no-homopolymer-correction'])
 
         # output centroids to file
         # output biom file
         # run blast if necessary
-        centroid_fname = join(self.options['outdir'], 'cluster_centroids.fa')
-        biom_fname = join(self.options['outdir'], 'seance.biom')
+        centroid_fname = self.options['cluster-fasta'] #join(self.options['outdir'], 'cluster_centroids.fa')
+        biom_fname = self.options['cluster-biom'] #join(self.options['outdir'], 'seance.biom')
         otu_names = {}
 
         # blast to get better names
@@ -264,6 +264,8 @@ class WorkFlow(object) :
 
         b.write_to(filename)
         self.log.info("written %s" % filename)
+
+
 
 
 #-------------------------------------------------------------------------------------------------

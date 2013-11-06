@@ -27,7 +27,7 @@ class Cluster(object) :
     def centroids(self) :
         return [ c[0] for c in self.clusters ]
 
-    def alignment_similarity(self, seq1, seq2) :
+    def alignment_similarity(self, seq1, seq2, homopolymer_correction) :
         # write out
         f = open(os.path.join(System.tempdir(), 'tmp'), 'w')
 
@@ -38,7 +38,11 @@ class Cluster(object) :
 
         # align
         aligned = []
-        fq = Pagan().get_454_alignment(f.name)
+        if homopolymer_correction :
+            fq = Pagan().get_454_alignment(f.name)
+        else :
+            fq = Pagan().get_alignment(f.name)
+        
         fq.open()
 
         for seq in fq :
@@ -81,7 +85,7 @@ class Cluster(object) :
         #return same / leng
         return (leng - diff) / leng
 
-    def create_clusters(self, keys=None) :
+    def create_clusters(self, keys=None, homopolymer_correction=True) :
         seqcount = collections.Counter()
 
         if keys == None :
@@ -99,7 +103,7 @@ class Cluster(object) :
             seq = self.db.get(key)
 
             for c in self.clusters :
-                if self.alignment_similarity(self.db.get(c[0]), seq) >= self.similarity_threshold :
+                if self.alignment_similarity(self.db.get(c[0]), seq, homopolymer_correction) >= self.similarity_threshold :
                     c.append(key)
                     clustered = True
                     break
