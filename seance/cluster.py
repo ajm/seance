@@ -16,6 +16,9 @@ class Cluster(object) :
         self.verbose = verbose
         self.log = logging.getLogger('seance')
 
+    def __len__(self) :
+        return len(self.clusters)
+
     def all(self) :
         tmp = []
 
@@ -26,6 +29,92 @@ class Cluster(object) :
 
     def centroids(self) :
         return [ c[0] for c in self.clusters ]
+    
+    def merge(self, names) :
+        tmp = {} # cluster --> species
+
+        for k,v in names.iteritems() :
+            data = v.split('_')
+            tmp[k] = '_'.join(data[1:-1])
+
+        unknowns = 0
+        merged_clusters = {} # species --> cluster
+
+        # clusters are in descending order of size
+        for c in self.clusters :
+            try :
+                species = tmp[c[0]]
+            except KeyError :
+                species = "unknown_%d" % unknowns
+                unknowns += 1
+
+            if species in merged_clusters :
+                merged_clusters[species] += c
+            else :
+                merged_clusters[species] = c
+
+        self.log.info("%d clusters merged into %d clusters based on blast hits" % (len(self.clusters), len(merged_clusters)))
+
+        self.clusters = sorted(merged_clusters.values(), key=len, reverse=True)
+
+    def distance(self, aligned, homopolymer_correction) :
+        leng = float(min(len(aligned[0]), len(aligned[1])))
+
+        last_gap = True 
+        diff = 0
+        for c1,c2 in zip(aligned[0], aligned[1]) :
+            gap = '-' in (c1,c2)
+
+            if last_gap and gap :
+                continue
+
+            if c1 != c2 :
+                diff += 1
+
+            last_gap = gap
+
+        if last_gap :
+            diff -= 1
+
+        return (leng - diff) / leng
+
+    def distance2(self, aligned, homopolymer_correction) :
+        leng = float(min(len(aligned[0]), len(aligned[1])))
+
+        last_match = '-'
+        last_gap = True 
+        diff = 0
+
+        for c1,c2 in zip(aligned[0], aligned[1]) :
+            gap = '-' in (c1,c2)
+
+            # only count gaps as a single difference
+            # so continue
+            if last_gap and gap :
+                continue
+
+            # however, if the gap is trailing a homopolymer
+            # we may want to also ignore it
+            if gap :
+                # only one can have a gap
+                # if last character was a match and 
+                # the other current character is the same
+                #   => then we are in a homopolymer
+                #   => if homopolymer_correction, continue
+                c = c1 if c1 != '-' else c2
+                if c == last_match and homopolymer_correction :
+                    continue
+
+            if c1 != c2 :
+                diff += 1
+
+            last_match = c1 if c1 == c2 else '-'
+            last_gap = gap
+
+        if last_gap :
+            diff -= 1
+
+        return (leng - diff) / leng
 
     def alignment_similarity(self, seq1, seq2, homopolymer_correction) :
         # write out
@@ -62,28 +151,7 @@ class Cluster(object) :
         if len(aligned) != 2 :
             return 0.0
 
-        # calculate distance
-        #same = len(filter(lambda x: x[0] == x[1], zip(aligned[0], aligned[1])))
-        leng = float(min(len(aligned[0]), len(aligned[1])))
-
-        last_gap = True 
-        diff = 0
-        for c1,c2 in zip(aligned[0], aligned[1]) :
-            gap = '-' in (c1,c2)
-
-            if last_gap and gap :
-                continue
-
-            if c1 != c2 :
-                diff += 1
-
-            last_gap = gap
-
-        if last_gap :
-            diff -= 1
-
-        #return same / leng
-        return (leng - diff) / leng
+        return self.distance2(aligned, homopolymer_correction)
 
     def create_clusters(self, keys=None, homopolymer_correction=True) :
         seqcount = collections.Counter()

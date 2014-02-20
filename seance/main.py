@@ -11,12 +11,12 @@ from seance.system import System
 
 verbose_level = logging.DEBUG # logging.INFO
 default_dir = './out_dir'
-default_prefix = join(default_dir, 'seance')
+default_prefix = 'seance'
 
-def get_default_options() :
+def get_default_options(fillin=False) :
     global default_dir
 
-    return {
+    tmp = {
             'input-files'       : [],
             'outdir'            : default_dir,
             'metadata'          : None,
@@ -28,48 +28,74 @@ def get_default_options() :
             'miderrors'         : 0,
             'midlength'         : 5,
 
-            'length'            : 300, 
+            'length'            : 250, 
             'quality'           : 25,
             'windowlength'      : None,
             'removeambiguous'   : False,
             'maxhomopolymer'    : 8,
             'chimeras'          : False,
 
-            'duplicate-threshold'       : 2,
-            'sample-threshold'          : 2,
-            'contamination-threshold'   : 0,
-            'otu-similarity'            : 0.97,
-            'blast-centroids'           : False,
-            'no-homopolymer-correction' : False,
-
-            'silva-prefix'      : None,
+            'total-duplicate-threshold'    : 1,
+            'sample-threshold'              : 2,
+            'duplicate-threshold'           : 1,
+            'otu-similarity'                : 0.99,
+            'blast-centroids'               : False,
+            'merge-blast-hits'              : False,
+            'no-homopolymer-correction'     : False,
 
             'output-prefix'     : default_prefix,
-            'cluster-fasta'     : default_prefix + '.clusters.fasta',
-            'cluster-biom'      : default_prefix + '.clusters.biom',
-            'phylogeny-fasta'   : default_prefix + '.phylogeny.fasta',
-            'phylogeny-tree'    : default_prefix + '.phylogeny.tree',
+            'cluster-fasta'     : None,
+            'cluster-biom'      : None,
+            'phylogeny-fasta'   : None,
+            'phylogeny-tree'    : None,
+
+            'silva-fasta'       : None,
+            'silva-tree'        : None,
 
             'verbose'           : False
            }
 
+    if fillin :
+        apply_output_prefix(tmp)
+
+    return tmp
+
+def apply_output_prefix(d, command='all') :
+    tmp = d['output-prefix']
+    tmp = join(d['outdir'], tmp)
+
+    if not d['cluster-fasta'] :
+        d['cluster-fasta']   = tmp + '.cluster.fasta'
+
+    if not d['cluster-biom'] :
+        d['cluster-biom']    = tmp + '.cluster.biom'
+    
+    if not d['phylogeny-fasta'] :
+        d['phylogeny-fasta'] = tmp + '.phylogeny.fasta'
+
+    if not d['phylogeny-tree'] :
+        d['phylogeny-tree']  = tmp + '.phylogeny.tree'
+
 def get_all_programs() :
-    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime', 'blastn', 'mothur', 'cutadapt']
+    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime', 'blastn', 'ampliconnoise']
 
 def get_required_programs(command, options) :
     tmp = []
 
     if command == 'preprocess' :
-        tmp.append('uchime')
+        if options['chimeras'] :
+            tmp.append('uchime')
 
         if '.sff' in [splitext(i)[1] for i in options['input-files']] :
             tmp.append('sff2fastq')
 
         if options['denoise'] :
-            tmp.append('mothur')
+            tmp.append('PyroDist')
+            tmp.append('FCluster')
+            tmp.append('PyroNoise')
 
-        if options['clipprimers'] :
-            tmp.append('cutadapt')
+        #if options['clipprimers'] :
+        #    tmp.append('cutadapt')
 
     elif command == 'cluster' :
         tmp.append('pagan')
@@ -81,7 +107,7 @@ def get_required_programs(command, options) :
         tmp.append('pagan')
         tmp.append('exonerate')
 
-        if options['silva-prefix'] == None :
+        if not options['silva-fasta'] :
             tmp.append('raxml')
 
     elif command == 'heatmap' :
@@ -110,7 +136,7 @@ def list_sentence(l) :
     return "%s and %s" % (', '.join(l[:-1]), l[-1])
 
 def usage() :
-    options = get_default_options()
+    options = get_default_options(True)
 
     print >> sys.stderr, """Usage: %s command [OPTIONS] <sff files>
 
@@ -137,24 +163,26 @@ Legal commands are %s (see below for options).
     Cluster options:
         -o DIR      --outdir=DIR            (default = %s)
         -m FILE     --metadata=FILE         (default = %s)
-        -a NUM      --duplicates=NUM        (default = %s)
+        -a NUM      --totalduplicates=NUM   (default = %s)
         -b NUM      --samples=NUM           (default = %s)
-        -c NUM      --contamination=NUM     (default = %s)
+        -c NUM      --duplicates=NUM        (default = %s)
         -t REAL     --similarity=REAL       (default = %s)
                     --blastcentroids        (default = %s)
+                    --mergeblasthits        (default = %s)
                     --nohomopolymer         (default = %s)
-                    --output=FILEPREFIX     (default = %s)
+                    --output=FILEPREFIX     (default = %s{.cluster.fasta, .cluster.biom})
 
     Phylogeny options:
         -o DIR      --outdir=DIR            (default = %s)
         -m FILE     --metadata=FILE         (default = %s)
                     --clusters=FILE         (default = %s)
-        -s FILE     --silva=FILEPREFIX      (default = %s)
-                    --output=FILEPREFIX     (default = %s)
+        -s FILE     --silva=FILEPREFIX      (default = %s, expects FILEPREFIX{.fasta, .tree})
+                    --output=FILEPREFIX     (default = %s{.phylogeny.fasta, .phylogeny.tree})
 
     Heatmap options:
                     --biom=FILE             (default = %s)
                     --tree=FILE             (default = %s)
+                    --output=FILE           (default = %s.pdf)
 
     Misc options:
         -v          --verbose               (default = %s)
@@ -179,20 +207,22 @@ Legal commands are %s (see below for options).
         str(options['chimeras']),
         str(options['outdir']),
         str(options['metadata']),
-        str(options['duplicate-threshold']),
+        str(options['total-duplicate-threshold']),
         str(options['sample-threshold']), 
-        str(options['contamination-threshold']),
+        str(options['duplicate-threshold']),
         str(options['otu-similarity']),
         str(options['blast-centroids']),
+        str(options['merge-blast-hits']),
         str(options['no-homopolymer-correction']),
         str(options['output-prefix']),
         str(options['outdir']),
         str(options['metadata']),
         str(options['cluster-fasta']),
-        str(options['silva-prefix']),
+        str(options['silva-fasta']),
         str(options['output-prefix']),
         str(options['cluster-biom']),
         str(options['phylogeny-tree']),
+        str(options['output-prefix']),
         str(options['verbose'])
       )
 
@@ -242,15 +272,6 @@ def expect_iupac(parameter, argument) :
 def parse_args(args) :
     options = get_default_options()
 
-    # if user sets --denoise, then we don't really need to do our own
-    # length and quality check, but if they explicitly set them, do it
-    tmp = {}
-    tmp['quality'] = options['quality']
-    tmp['length'] = options['length']
-
-    options['quality'] = None
-    options['length'] = None
-
     try :
         opts,args = getopt.getopt(
                         args,
@@ -268,16 +289,21 @@ def parse_args(args) :
                             "maxhomopolymer=",
                             "removeambiguous",
                             "metadata=",
-                            "duplicates=",
+                            "totalduplicates=",
                             "samples=",
-                            "contamination=",
+                            "duplicates=",
                             "similarity=",
                             "silva=",
                             "verbose",
                             "help",
                             "blastcentroids",
+                            "mergeblasthits",
                             "chimeras",
-                            "nohomopolymer"
+                            "nohomopolymer",
+                            "output=",
+                            "biom=",
+                            "tree=",
+                            "clusters="
                         ]
                     )
 
@@ -333,23 +359,27 @@ def parse_args(args) :
         elif o in ('-n', '--removeambiguous') :
             options['removeambiguous'] = True
 
-        elif o in ('-a', '--duplicates') :
-            options['duplicate-threshold'] = expect_int("duplicates", a)
+        elif o in ('-a', '--totalduplicates') :
+            options['total-duplicate-threshold'] = expect_int("total-duplicates", a)
 
         elif o in ('-b', '--samples') :
             options['sample-threshold'] = expect_int("samples", a)
 
-        elif o in ('-c', '--contamination') :
-            options['contamination-threshold'] = expect_int("contamination", a)
+        elif o in ('-c', '--duplicates') :
+            options['duplicate-threshold'] = expect_int("duplicates", a)
 
         elif o in ('-t', '--similarity') :
             options['otu-similarity'] = expect_float("similarity", a)
 
         elif o in ('-s', '--silva') :
-            options['silva'] = a
+            options['silva-fasta'] = a + '.fasta'
+            options['silva-tree'] = a + '.tree'
 
         elif o in ('--blastcentroids') :
             options['blast-centroids'] = True
+
+        elif o in ('--mergeblasthits') :
+            options['merge-blast-hits'] = True
 
         elif o in ('--chimeras') :
             options['chimeras'] = True
@@ -357,25 +387,30 @@ def parse_args(args) :
         elif o in ('--nohomopolymer') :
             options['no-homopolymer-correction'] = True
 
+        elif o in ('--clusters') :
+            options['cluster-fasta'] = a
+
+        elif o in ('--biom') :
+            options['cluster-biom'] = a
+
+        elif o in ('--tree') :
+            options['phylogeny-tree'] = a
+
+        elif o in ('--output') :
+            options['output-prefix'] = a
+
         else :
             assert False, "unhandled option %s" % o
 
 
     options['input-files'] = args
 
-    # reset default quality and length if denoise is not set
-    # and user has not explicitly set them
-    if not options['denoise'] :
-        if not options['quality'] :
-            options['quality'] = tmp['quality']
-        if not options['length'] :
-            options['length'] = tmp['length']
-
-
     return options
 
 def check_options(command, options) :
     system = System()
+
+    apply_output_prefix(options, command)
 
     if not system.check_directory(options['outdir'], create=True) :
         sys.exit(1)
@@ -400,8 +435,8 @@ def check_options(command, options) :
             print >> sys.stderr, "Error: sample-threshold must be > 0 (read %d)" % options['sample-threshold']
             sys.exit(1)
 
-        if options['duplicate-threshold'] <= 0 :
-            print >> sys.stderr, "Error: read-threshold must be > 0 (read %d)" % options['duplicate-threshold']
+        if options['total-duplicate-threshold'] <= 0 :
+            print >> sys.stderr, "Error: total-duplicate-threshold must be > 0 (read %d)" % options['total-duplicate-threshold']
             sys.exit(1)
 
         if options['otu-similarity'] < 0.0 or options['otu-similarity'] > 1.0 :
@@ -411,6 +446,10 @@ def check_options(command, options) :
     elif command == 'phylogeny' :
         if not system.check_file(options['cluster-fasta']) :
             sys.exit(1)
+
+        if options['silva-fasta'] :
+            if not system.check_files([options['silva-fasta'], options['silva-tree']]) :
+                sys.exit(1)
 
     elif command == 'heatmap' :
         if not system.check_files([options['cluster-biom'], options['phylogeny-tree']]) :

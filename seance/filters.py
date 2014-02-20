@@ -3,6 +3,8 @@ import abc
 import operator
 import logging
 
+from seance.datatypes import IUPAC
+
 class FilterError(Exception) :
     pass
 
@@ -32,7 +34,7 @@ class MultiFilter(Filter) :
     def accept(self, seq) :
         for index,f in enumerate(self.filters) :
             if not f.accept(seq) :
-                self.counts[index] += 1
+                self.counts[index] += seq.duplicates
                 return False
         return True
 
@@ -128,11 +130,11 @@ class HomopolymerFilter(Filter) :
         return True
 
 class MidFilter(Filter) :
-    def __init__(self, mid, miderr) :
-        logging.getLogger('seance').info("created MidErrorFilter(mid=%s, miderr=%d)" % (mid, miderr))
+    def __init__(self, mid, err) :
+        logging.getLogger('seance').info("created MidFilter(mid=%s, err=%d)" % (mid, err))
         self.mid = mid
         self.midlen = len(mid)
-        self.miderr = miderr
+        self.err = err
 
     def _hamming(self, mid, seq) :
         return len(filter(lambda x: x[0] != x[1], zip(mid, seq)))
@@ -140,5 +142,27 @@ class MidFilter(Filter) :
     def accept(self, seq) :
         seqmid = seq.sequence[:self.midlen]
         seq.remove_mid(self.midlen)
-        return self._hamming(self.mid, seqmid) <= self.miderr
+        return self._hamming(self.mid, seqmid) <= self.err
+
+class PrimerFilter(Filter) :
+    def __init__(self, primer, err, clip) :
+        logging.getLogger('seance').info("created PrimerFilter(primer=%s, err=%d)" % (primer, err))
+        self.primer = primer
+        self.len = len(primer)
+        self.err = err
+        self.clip = clip
+
+    def accept(self, seq) :
+        seqprimer = seq.sequence[:self.len]
+
+        ret = IUPAC.close_enough(self.primer, seq.sequence, self.err)
+
+        if ret and self.clip :
+            # primer part of sequence may be longer or
+            # shorter, but it does not really matter
+            # as terminal gaps are not included in our
+            # definition of identity
+            seq.remove_mid(self.len)
+            
+        return ret
 

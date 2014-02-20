@@ -46,7 +46,10 @@ class Sample(object) :
 
         for seq in self.fastq :
             if self.filters.accept(seq) :
-                self.seqcounts[self.db.put(seq)] += 1
+                #print "accept", seq.id, seq.duplicates, seq.sequence[:60]
+                self.seqcounts[self.db.put(seq)] += seq.duplicates
+            #else :
+            #    print "reject", seq.id, seq.duplicates, seq.sequence[:60]
 
         self.fastq.close()
 
@@ -70,7 +73,7 @@ class Sample(object) :
 
         self.fastq.close()
 
-        self.log.info("loaded %d sequences (%d unique sequences)" % \
+        self.log.info("loaded %d reads (%d unique sequences)" % \
                 (sum(self.seqcounts.values()), len(self.seqcounts)))
 
     def __detect_chimeras(self) :

@@ -67,6 +67,9 @@ class FastqFile(DataFile) :
 
     def __init__(self, fname) :
         super(FastqFile, self).__init__(fname, ".fastq")
+        self._reset()
+
+    def _reset(self) :
         self._filehandle = None #open(self.get_filename())
         self._state = FastqFile.SEQID
         self._linenum = 0
@@ -132,6 +135,8 @@ class FastqFile(DataFile) :
     def close(self) :
         if self._filehandle :
             self._filehandle.close()
+
+        self._reset()
 
     def seq(self) :
         seqid = self._current[FastqFile.SEQID]

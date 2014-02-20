@@ -25,6 +25,12 @@ class SequenceDB(object) :
     def get(self, key) :
         return self._db.get(key)
 
+    def num_reads(self) :
+        return self._db.num_reads()
+
+    def num_sequences(self) :
+        return self._db.num_sequences()
+
 #    def debug(self) :
 #        self._db.debug()
 #
@@ -89,6 +95,12 @@ class SequenceDict(object) :
     def __contains__(self, cseq) :
         return self.has_sequence(cseq)
 
+    def num_reads(self) :
+        return sum([ i.duplicates for i in self.db.values() ])
+
+    def num_sequences(self) :
+        return len(self)
+
     def __len__(self) :
         return len(self.db)
 
@@ -110,6 +122,12 @@ class WrapperDict(dict) :
             self.__setitem__(key, seq)
 
         return key
+
+    def num_reads(self) :
+        return sum([ i.duplicates for i in self.values() ])
+
+    def num_sequences(self) :
+        return len(self)
 
 class CompressedSequenceDict(object) :
     def __init__(self) :

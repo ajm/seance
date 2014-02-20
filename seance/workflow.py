@@ -13,9 +13,10 @@ from seance.datatypes import SampleMetadata
 from seance.filters import *
 from seance.db import SequenceDB
 from seance.progress import Progress
-from seance.tools import Sff2Fastq, GetMID, Cutadapt, Pagan, BlastN, PyroNoise
+from seance.tools import Sff2Fastq, GetMID2, Cutadapt, Pagan, BlastN, AmpliconNoise
 from seance.cluster import Cluster
 from seance.biom import BiomFile
+from seance.heatmap import heatmap as phylogenetic_heatmap
 
 
 class WorkFlow(object) :
@@ -27,21 +28,28 @@ class WorkFlow(object) :
     def __filters(self, mid) :
         mf = MultiFilter()
 
-        # the mid may be trimmed off by mothur/pyronoise 
-        # or during the removal of the forward adaptor
-        mid_intact = not (self.options['denoise'] or (self.options['clipprimers'] and self.options['forwardprimer'] != None))
+        ## if we have trimmed the forward primer, then the mid will be trimmed 
+        ## off with it and this check will always fail
+        #if not self.options['clipprimers'] :
+        #    mf.add(MidFilter(mid, self.options['miderrors']))
 
-        # if we have trimmed the forward primer, then the mid will be trimmed 
-        # off with it and this check will always fail
-        if mid_intact :
-            mf.add(MidFilter(mid, self.options['miderrors']))
 
-        # if --denoise is used most of these will be None unless explicitly set
+        # always remove the mid, because it is now left by denoising
+        mf.add(MidFilter(mid, self.options['miderrors']))
+
+        # check primer, remove if requested
+        if self.options['forwardprimer'] is not None :
+            mf.add(PrimerFilter(self.options['forwardprimer'], 2, self.options['clipprimers']))
+
         if self.options['length'] != None :
             mf.add(LengthFilter(self.options['length']))
 
         if self.options['removeambiguous'] :
             mf.add(AmbiguousFilter())
+
+        # homopolymer and quality are taken care of
+        if self.options['denoise'] :
+            return mf
 
         if self.options['maxhomopolymer'] > 0 :
             mf.add(HomopolymerFilter(self.options['maxhomopolymer']))
@@ -65,21 +73,26 @@ class WorkFlow(object) :
         return mid
 
     def __mid_fastq(self, fastq) :
-        return GetMID(self.options['midlength']).run(fastq.get_filename())
+        #return GetMID(self.options['midlength']).run(fastq.get_filename())
+        return GetMID2(self.options['midlength']).run(fastq)
 
     def __get_files(self, file_names) :
         for fname in file_names :
-            root,ext = splitext(fname)
+            root,ext = splitext(basename(fname))
 
             self.log.info("current file = %s" % fname)
 
             if ext == '.sff' :
+                if os.path.exists(join(self.options['outdir'], basename(fname)+'.fasta.sample')) :
+                    self.log.info("skipping %s (already preprocessed)" % fname)
+                    continue
+
                 sff = SffFile(fname)
 
                 # annoyingly, mid is figured out twice if we are
                 # doing denoising
                 if self.options['denoise'] :
-                    yield PyroNoise().run(sff,
+                    yield AmpliconNoise().run(sff,
                             self.options['outdir'],
                             self.options['forwardprimer'],
                             self.__mid_sff(sff),
@@ -104,17 +117,20 @@ class WorkFlow(object) :
         p.start()
 
         for f in self.__get_files(self.options['input-files']) :
+            print "get mid on %s" % f.get_filename()
             mid = self.__mid_fastq(f)
-            
-            if self.options['clipprimers'] :
-                f = Cutadapt().run(f, 
-                        self.options['outdir'],
-                        self.options['forwardprimer'], 
-                        self.options['reverseprimer'])
+            print "mid = %s" % mid
+
+            # does not like degenerate primers...
+#            if self.options['clipprimers'] :
+#                f = Cutadapt().run(f, 
+#                        self.options['outdir'],
+#                        self.options['forwardprimer']) #, 
+#                        #self.options['reverseprimer'])
             
             sample = Sample(f, 
                         self.seqdb, 
-                        filters=self.__filters(mid), 
+                        self.__filters(mid),
                         chimeras=self.options['chimeras'])
             
             sample.print_sample()
@@ -197,19 +213,29 @@ class WorkFlow(object) :
         
         # get keys of sequences we want to cluster
         input_keys = self.__get_cluster_input(samples,
-                                self.options['duplicate-threshold'],
+                                self.options['total-duplicate-threshold'],
                                 self.options['sample-threshold'],
-                                self.options['contamination-threshold'])
+                                self.options['duplicate-threshold'])
+
+        # get some info
+        num_reads = sum([ self.seqdb.get(i).duplicates for i in input_keys ])
+        print "clustering %d/%d (%.2f%%) sequences (%d/%d (%.2f%%) reads)" % \
+                        (len(input_keys), self.seqdb.num_sequences(), \
+                        len(input_keys) * 100 / float(self.seqdb.num_sequences()), \
+                        num_reads, self.seqdb.num_reads(), \
+                        num_reads * 100 / float(self.seqdb.num_reads()))
 
         # clustering
         c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['verbose'])
         c.create_clusters(keys=input_keys, homopolymer_correction=not self.options['no-homopolymer-correction'])
 
+        print "created %d clusters" % len(c)
+
         # output centroids to file
         # output biom file
         # run blast if necessary
-        centroid_fname = self.options['cluster-fasta'] #join(self.options['outdir'], 'cluster_centroids.fa')
-        biom_fname = self.options['cluster-biom'] #join(self.options['outdir'], 'seance.biom')
+        centroid_fname = self.options['cluster-fasta']
+        biom_fname = self.options['cluster-biom']
         otu_names = {}
 
         # blast to get better names
@@ -218,8 +244,15 @@ class WorkFlow(object) :
             otu_names = BlastN().get_names(
                     self.__fasta(centroid_fname, c.centroids()))
 
+            if self.options['merge-blast-hits'] :
+                self.log.info("merging clusters based on top blast hits")
+                c.merge(otu_names)
+
+
         self.__fasta(centroid_fname, c.centroids(), names=otu_names)
         self.__biom(biom_fname, samples, c, otu_names)
+        
+        return 0
 
     def __fasta(self, filename, keys, names=None) :
         f = open(filename, 'w')
@@ -265,131 +298,41 @@ class WorkFlow(object) :
         b.write_to(filename)
         self.log.info("written %s" % filename)
 
-
-
-
-#-------------------------------------------------------------------------------------------------
-
     def phylogeny(self) :
-        self.__rebuild_database()
+        num_sequences = self.__count(self.options['cluster-fasta'])
+        p = Pagan()
 
-        phy_keys = self.__get_important_keys(self.options['read-threshold'], self.options['sample-threshold'])
-        phy_fasta = self.__write_fasta(phy_keys, "reference_phyla.fasta")
-
-        # create a reference phylogeny
-        print "Aligning %s sequences with PAGAN%s ..." % (len(phy_keys), "" if len(phy_keys) < 50 else ", (this might take a while)")
-        ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
-
-        # perform phylogenetic placement of all the reads in a sample
-        # probably best to do this in the Sample class
-        for sample in self.samples :
-            if len(sample) == 0 :
-                continue
-
-            print "\n\n\nPhylogenetic placement: %d sequences\n\n" % len(sample)
-            queries = os.path.join(self.temp_directory, sample.sff.get_basename() + ".sample")
-            placement = Pagan().phylogenetic_placement(ref_alignment, ref_tree, queries)
-
-    def otu_phylogeny(self) :
-        self.__rebuild_database()
-
-        phy_keys = self.__get_important_keys(self.options['read-threshold'], self.options['sample-threshold'])
-
-        # cluster everything
-        c = Cluster(self.seqdb, self.options['otu-similarity'])
-        c.create_clusters(keys=phy_keys)
-
-        clust_keys = map(lambda x : x[0], c.clusters)
-        phy_fasta = self.__write_fasta(clust_keys, "reference_phyla.fasta")
-
-        # blast to get better names
-        print "Running blastn to get OTU names..."
-        otu_names = BlastN().get_names(phy_fasta)
-
-        phy_fasta = self.__write_fasta(clust_keys, "reference_phyla.fasta", otu_names)
-
-        if not self.options['silva'] :
-            # create a reference phylogeny
-            print "Aligning %s sequences with PAGAN%s ..." % (len(clust_keys), "" if len(clust_keys) < 50 else ", (this might take a while)")
-            ref_alignment,ref_tree = Pagan().phylogenetic_alignment(phy_fasta)
+        if not self.options['silva-fasta'] :
+            self.log.info("aligning %s sequences with PAGAN ..." % (num_sequences))
+            alignment,tree = p.phylogenetic_alignment(self.options['cluster-fasta'])
         else :
-            print "Aligning %s sequences with PAGAN against SILVA ..." % (len(clust_keys))
-            s = self.options['silva']
-            ref_alignment,ref_tree = Pagan().silva_phylogenetic_alignment(s + '.fasta', s + '.tree', phy_fasta)
+            self.log.info("aligning %s sequences with PAGAN against SILVA ..." % (num_sequences))
+            alignment,tree = p.silva_phylogenetic_alignment(
+                                                    self.options['silva-fasta'], 
+                                                    self.options['silva-tree'], 
+                                                    self.options['cluster-fasta'])
 
-        # write results
-        b = BiomFile()
+        os.rename(alignment, self.options['phylogeny-fasta'])
+        os.rename(tree, self.options['phylogeny-tree'])
 
-        # if a column is going to sum to 0, then it is not worth
-        # including it
-        samp = []
-        for sample in self.samples :
-            for key in phy_keys :
-                if key in sample :
-                    samp.append(sample)
-                    break
+        self.log.info("created %s" % self.options['phylogeny-fasta'])
+        self.log.info("created %s" % self.options['phylogeny-tree'])
 
-        print "out of %d samples %d included in heatmap" % (len(self.samples), len(samp))
+        return 0
 
-#        for i in self.samples :
-#            print i
-#
-#        print "==="
-#
-#        for i in samp :
-#            print i
+    def __count(self, fasta) :
+        fq = FastqFile(fasta)
+        fq.open()
 
-        for index, sample in enumerate(samp) :
-            #b.add_sample(("%d " % index) + sample.description(), sample.metadata)
-            b.add_sample(sample.description(), sample.metadata)
+        count = 0
+        for seq in fq :
+            count += 1
 
-        for key in clust_keys :
-            b.add_otu(otu_names.get(key, "%s_unknown" % key))
+        fq.close()
+        return count
 
-        if self.options['silva'] :
-            fq = FastqFile(phy_fasta + '.silva.pruned.fas')
-            fq.open()
-
-            # XXX this is not very robust
-            for seq in fq :
-                if ';' in seq.id :
-                    b.add_otu(seq.id.split(';')[-1])
-
-            fq.close()
-
-        # XXX PRINT EVERYTHING
-        for cindex in range(len(c.clusters)) :
-            cluster = c.clusters[cindex]
-            key = clust_keys[cindex]
-            cluster_label = otu_names.get(key, "%s_unknown" % key)
-
-            f = open(os.path.join(self.temp_directory, "cluster_%s.fasta" % (cluster_label)), 'w')
-            for read in cluster :
-                print >> f, self.seqdb.get(read).fasta().rstrip()
-            f.close()
-        # XXX /PRINT EVERYTHING
-
-        for sindex in range(len(samp)) :
-            sample = samp[sindex]
-            for cindex in range(len(c.clusters)) :
-                cluster = c.clusters[cindex]
-                count = 0
-
-                key = clust_keys[cindex]
-                sample_label = "%s-%s_%s" % (sample.metadata['location'], sample.metadata['lemur'], sample.metadata['file'].split('-')[0])
-                sample_label = "%s" % sample.metadata['id']
-                cluster_label = otu_names.get(key, "%s_unknown" % key)
-
-                f = open(os.path.join(self.temp_directory, "sample_%s_cluster_%s.fasta" % (sample_label, cluster_label)), 'w')
-                for read in cluster :
-                    if read in sample :
-                        count += sample.seqcounts[read]
-                        #print >> f, self.seqdb.get(read).fasta().rstrip()
-                        current = self.seqdb.get(read)
-                        print >> f, ">%s NumDuplicates=%d\n%s" % (current.id, sample.seqcounts[read], current.sequence)
-
-                f.close()
-                b.add_quantity(cindex, sindex, count)
-
-        b.write_to(os.path.join(self.temp_directory, "reference_phyla.biom"))
-
+    def heatmap(self) :
+        self.log.info("creating heatmap using %s and %s" % (self.options['cluster-biom'], self.options['phylogeny-tree']))
+        phylogenetic_heatmap(self.options['cluster-biom'], self.options['phylogeny-tree'], self.options['output-prefix'] + '.pdf')
+        print "wrote %s.pdf" % self.options['output-prefix']
+        return 0

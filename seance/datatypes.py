@@ -28,6 +28,31 @@ class IUPAC(object) :
     }
 
     @staticmethod
+    def close_enough(primer, sequence, diff) :
+        if diff < 0 :
+            return False
+
+        if (len(primer) == 0) or (len(sequence) == 0) :
+            return True
+
+        m = IUPAC.equal(sequence[0], primer[0])
+
+        return IUPAC.close_enough(primer[1:], sequence[1:], diff if m else diff-1) or \
+               IUPAC.close_enough(primer[1:], sequence, diff-1) or \
+               IUPAC.close_enough(primer, sequence[1:], diff-1)
+
+    @staticmethod
+    def equal(base, iupac) :
+        if   base == 'A' :
+            return iupac in "AMRWVHDN"
+        elif base == 'G' :
+            return iupac in "GRSKVDBN"
+        elif base == 'T' :
+            return iupac in "TWYKHDBN"
+        elif base == 'C' :
+            return iupac in "CMSYVHBN"
+
+    @staticmethod
     def get(bases) :
         try :
             #return IUPAC.mapping[''.join(sorted(bases))]

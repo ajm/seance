@@ -6,10 +6,12 @@ import re
 import urllib2
 import logging
 import glob
+import shutil
+import collections
 
-from os.path import abspath, join
+from os.path import abspath, join, dirname
 from seance.filetypes import SffFile, FastqFile
-
+from seance.datatypes import IUPAC
 
 class ExternalProgramError(Exception) :
     pass
@@ -31,7 +33,7 @@ class ExternalProgram(object) :
     @staticmethod
     def get_path(programname) :
         for p in os.environ['PATH'].split(os.pathsep) :
-            progpath = os.path.join(p, programname)
+            progpath = join(p, programname)
             if os.path.isfile(progpath) :
                 # there may be another executable with the correct
                 # permissions lower down in the path, but the shell
@@ -88,6 +90,7 @@ class GetMID(object) :
         # if the file is empty, there is nothing to read, so
         # returning an empty string will not matter...
         if output == '':
+            self.log.info("mid empty")
             return output
 
         if re.match("[GATC]{%d}" % self.length, output) == None :
@@ -95,7 +98,30 @@ class GetMID(object) :
             sys.exit(1)
             #raise ExternalProgramError("%s: %s does not look like a MID" % (type(self).__name__, output))
 
+        self.log.info("mid = %s" % output)
+
         return output
+
+class GetMID2(object) :
+    def __init__(self, length) :
+        self.length = length
+        self.log = logging.getLogger('seance')
+
+    def run(self, fastq) :
+        count = collections.Counter()
+        fastq.open()
+        
+        for s in fastq :
+            count[s[:self.length]] += s.duplicates
+
+        fastq.close()
+
+        if len(count) == 0 :
+            return ""
+
+        mid,midcount = count.most_common()[0]
+        self.log.info("mid = %s" % mid)
+        return mid
 
 class Pagan(ExternalProgram) :
     def __init__(self) :
@@ -344,10 +370,236 @@ class BlastN(ExternalProgram) :
 
         return names
 
+class PyroDist(ExternalProgram) :
+    def __init__(self) :
+        super(PyroDist, self).__init__('PyroDist')
+        self.command = "PyroDist -in %s -out %s -rin %s &> /dev/null"
+
+    def __lookup_file(self) :
+        f = join(dirname(ExternalProgram.get_path(self.programname)), "LookUp.dat")
+
+        if not os.path.exists(f) :
+            raise ExternalProgramError("%s - cannot find LookUp.dat (it needs to be in the same dir as %s)" % (self.programname, self.programname))
+
+        return f
+
+    def run(self, datfile, outfile) :
+        try :
+            self.system(self.command % (datfile, outfile, self.__lookup_file()))
+
+        except ExternalProgramError, epe :
+            self.log.error(str(epe))
+            sys.exit(1)
+
+        return "%s.fdist" % outfile
+    
+class FCluster(ExternalProgram) :
+    def __init__(self) :
+        super(FCluster, self).__init__('FCluster')
+        self.command = "FCluster -in %s -out %s &> /dev/null"
+
+    def run(self, fdistfile, outfile) :
+        try :
+            self.system(self.command % (fdistfile, outfile))
+
+        except ExternalProgramError, epe :
+            self.log.error(str(epe))            
+            sys.exit(1)
+
+        return "%s.list" % outfile
+
 class PyroNoise(ExternalProgram) :
     def __init__(self) :
         super(PyroNoise, self).__init__('PyroNoise')
-        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=%d, pdiffs=2, bdiffs=%d, minflows=360)\" &> /dev/null"
+        self.command = "PyroNoise -din %s -out %s -lin %s -rin %s -s 60.0 -c 0.01 &> /dev/null"
+
+    def __lookup_file(self) :
+        f = join(dirname(ExternalProgram.get_path(self.programname)), "LookUp.dat")
+
+        if not os.path.exists(f) :
+            raise ExternalProgramError("%s - cannot find LookUp.dat (it needs to be in the same dir as %s)" % (self.programname, self.programname))
+
+        return f
+
+    def run(self, datfile, listfile, outfile) :
+        try :
+            self.system(self.command % (datfile, outfile, listfile, self.__lookup_file()))
+
+        except ExternalProgramError, epe :
+            self.log.error(str(epe))            
+            sys.exit(1)
+
+        return "%s_cd.fa" % outfile
+
+class AmpliconNoise(ExternalProgram) :
+    def __init__(self) :
+        super(AmpliconNoise, self).__init__('AmpliconNoise')
+
+    def close_enough_old(self, primer, sequence, errors) :
+        err_count = 0
+
+        for i,j in zip(sequence, primer) :
+            if not IUPAC.equal(i, j) :
+                err_count += 1
+
+        #if len(a) > 10 :
+        #    print a, b, err_count
+
+        return err_count <= errors
+
+    def close_enough(self, primer, sequence, diff) :
+        if diff < 0 :
+            return False
+
+        if (len(primer) == 0) or (len(sequence) == 0) :
+            return True
+
+        m = IUPAC.equal(sequence[0], primer[0])
+
+        return self.close_enough(primer[1:], sequence[1:], diff if m else diff-1) or \
+               self.close_enough(primer[1:], sequence, diff-1) or \
+               self.close_enough(primer, sequence[1:], diff-1)
+
+    def extract(self, sff, outdir, primer, barcode, barcode_errors, max_homopolymer) :
+        try :
+            from Bio import SeqIO
+        except ImportError :
+            print >> sys.stderr, "BioPython not installed (only required for working with SFF files)"
+            sys.exit(1)
+
+        barcode_len = len(barcode)
+        primer_len = len(primer)
+
+        raw_seq_total = 0
+
+        names = []
+        flows = []
+        flowlens = []
+
+        for record in SeqIO.parse(sff.get_filename(), "sff") :
+            raw_seq_total += 1
+            good_bases = record.seq[record.annotations["clip_qual_left"] : record.annotations["clip_qual_right"]]
+            barcode_seq = good_bases[:barcode_len]
+            primer_seq = good_bases[barcode_len : barcode_len + primer_len]
+
+            new_length = 0
+
+            for i in range(0, len(record.annotations["flow_values"]), 4) : 
+                signal = 0
+                noise = 0
+
+                for j in range(4) :
+                    f = float(record.annotations["flow_values"][i + j]) / 100.0
+
+                    if int(f + 0.5) > max_homopolymer :
+                        break
+
+                    if f > 0.5 :
+                        signal += 1
+                        if f < 0.7 :
+                            noise += 1
+
+                if noise > 0 or signal == 0 :
+                    break
+
+                new_length += 1
+
+            new_length *= 4
+
+            if new_length > 450 :
+                new_length = 450
+
+            if new_length >= 360 and \
+                    IUPAC.close_enough(barcode, barcode_seq, barcode_errors) and \
+                    IUPAC.close_enough(primer, primer_seq, 2) :
+                flows.append(record.annotations["flow_values"])
+                flowlens.append(new_length)
+                names.append(record.id)
+
+
+
+        if len(flows) == 0 :
+            self.log.info("kept 0/%d sequences" % raw_seq_total)
+            return 0, None
+
+        # output pyronoise input file
+        # see http://userweb.eng.gla.ac.uk/christopher.quince/Software/PyroNoise.html
+        f = open(join(outdir, "flows.dat"), 'w')
+
+        print >> f, "%d %d" % (len(flows), max([ len(i) for i in flows ]))
+        for i in range(len(flows)) :
+            print >> f, " ".join([ names[i], str(flowlens[i]) ] + [ "%.2f" % (float(i) / 100.0) for i in flows[i] ])
+
+        f.close()
+
+        self.log.info("kept %d/%d sequences" % (len(flows), raw_seq_total))
+        return len(flows), f.name
+
+    def run(self, sff, outdir, forward_primer, barcode, barcode_errors, max_homopolymer) :
+        if not isinstance(sff, SffFile) :
+            raise ExternalProgramError("argument is not an SffFile")
+
+        output_name = abspath(join(outdir, sff.get_basename() + '.fasta'))
+
+        numseq,fname = self.extract(sff, outdir, forward_primer, barcode, barcode_errors, max_homopolymer)
+
+        # just so the rest of the pipeline can be run and there be a record
+        # of the sample containing zero sequences
+        if numseq == 0 :
+            open(output_name, 'w').close()
+            return FastqFile(output_name)
+
+        # well... this is a mess
+        # PyroDist does not like being given 1 sequence
+        if numseq == 1 :
+            try :
+                from Bio import SeqIO
+            except ImportError: 
+                print >> sys.stderr, "BioPython not installed (only required for working with SFF files)"
+                sys.exit(1)
+
+            fout = open(output_name, 'w')
+
+            for r in SeqIO.parse(sff.get_filename(), 'sff-trim') :
+                print >> fout, ">seq0 NumDuplicates=1\n%s" % r.seq
+            
+            fout.close()
+            
+            return FastqFile(output_name)
+
+        outfile = join(outdir, "flows")
+        
+        distfile = PyroDist().run(fname, outfile)
+        listfile = FCluster().run(distfile, outfile)
+        fafile   = PyroNoise().run(fname, listfile, outfile)
+
+        # read fa file
+        # add NumDulicates fields
+        # output with correct file name
+        fout = open(output_name, 'w')
+        f = FastqFile(outfile + "_cd.fa")
+        f.open()
+
+        count = 0
+        for seq in f :
+            dups = int(seq.id.split('_')[-1])
+            print >> fout, ">seq%d NumDuplicates=%d\n%s" % (count, dups, seq.sequence)
+            count += 1
+
+        f.close()
+        fout.close()
+
+        # delete intermediate files
+        shutil.rmtree(outfile)
+        for fname in glob.glob(outfile + '*') :
+            os.remove(fname)
+
+        return FastqFile(output_name)
+
+class PyroNoiseMothur(ExternalProgram) :
+    def __init__(self) :
+        super(PyroNoiseMothur, self).__init__('PyroNoise')
+        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=%d, pdiffs=0, bdiffs=%d, minflows=360)\" &> /dev/null"
 
     def delete_intermediates(self, prefix) :
         suffix = ['.fasta', '.flow', '.flow.files', '.qual', '.scrap.flow', '.summary', '.trim.flow']
@@ -428,7 +680,7 @@ class PyroNoise(ExternalProgram) :
         f.close()
 
         f = FastqFile(new_sff_name[:-3] + 'shhh.trim.fasta')
-        out_fasta = open(old_sff_name + ".fasta", 'w')
+        out_fasta = open(output_name, 'w')
         f.open()
         for seq in f :
             print >> out_fasta, "%s NumDuplicates=%d\n%s\n" % (seq.id, counts[seq.id[1:]], seq.sequence)
@@ -438,13 +690,13 @@ class PyroNoise(ExternalProgram) :
         self.delete_intermediates(sff_prefix)
         os.chdir(cwd)
 
-        return FastqFile(sff_name + '.fasta')
+        return FastqFile(output_name)
 
 class Cutadapt(ExternalProgram) :
     def __init__(self) :
         super(Cutadapt, self).__init__('cutadapt')
 
-    def run(self, fastq, outdir, forwardprimer, reverseprimer) :
+    def run(self, fastq, outdir, forwardprimer, reverseprimer=None) :
         command = "cutadapt"
 
         if (forwardprimer == None) and (reverseprimer == None) :
@@ -456,7 +708,9 @@ class Cutadapt(ExternalProgram) :
         if reverseprimer != None :
             command += (" -a %s" % reverseprimer)
 
-        outfile = "%s.adaptortrim" % os.path.join(outdir, fastq.get_basename())
+        #command += " --trimmed-only -e 0.0"
+
+        outfile = "%s.adaptortrim" % join(outdir, fastq.get_basename())
         command += (" %s > %s 2> /dev/null" % (fastq.get_filename(), outfile))
 
         try :
@@ -467,4 +721,27 @@ class Cutadapt(ExternalProgram) :
             sys.exit(1)
 
         return FastqFile(outfile)
+
+if __name__ == '__main__' :
+    log = logging.getLogger('seance')
+    log.setLevel(logging.DEBUG)
+
+    ch = logging.StreamHandler()
+    ch.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
+
+    log.addHandler(ch)
+
+    # ---
+
+    #p = PyroNoiseMothur()
+    p = AmpliconNoise() 
+   
+    sff_filename = "/Users/ajm/research/coding/mothra/test_files/Tg_12-25062012-1.sff"
+    outdir = "."
+    primer = "AGRGGTGAAATYCGTGGAC"
+    barcode = "CATGC"
+    barcode_errors = 0
+    max_homopolymers = 8
+
+    p.run(SffFile(sff_filename), outdir, primer, barcode, barcode_errors, max_homopolymers)
 
