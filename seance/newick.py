@@ -34,7 +34,7 @@ class Newick(runtime.Parser):
             return (ID, float(NUM))
         else: # == '"\\\\("'
             self._scan('"\\\\("', context=_context)
-            result = [] ; distance = 0.0
+            result = []
             tree = self.tree(_context)
             self._scan('","', context=_context)
             result.append(tree)

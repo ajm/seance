@@ -6,7 +6,7 @@ parser Newick :
 
     rule newick: tree ";"   {{ return tree }}
     rule tree: ID ":" NUM   {{ return (ID, float(NUM)) }} 
-                | "\\("     {{ result = [] ; distance = 0.0 }}
+                | "\\("     {{ result = [] }}
                 tree ","    {{ result.append(tree) }}
                 tree "\\)"  {{ result.append(tree) }}
                 (":" NUM)?  {{ return (result, float(NUM if 'NUM' in locals() else 0.0)) }}
