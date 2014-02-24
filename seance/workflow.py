@@ -17,6 +17,7 @@ from seance.tools import Sff2Fastq, GetMID2, Cutadapt, Pagan, BlastN, AmpliconNo
 from seance.cluster import Cluster
 from seance.biom import BiomFile
 from seance.heatmap import heatmap as phylogenetic_heatmap
+from seance.wasabi import wasabi as view_in_wasabi
 
 
 class WorkFlow(object) :
@@ -160,7 +161,7 @@ class WorkFlow(object) :
             if i not in md_used :
                 self.log.warn("preprocessed file for %s not found" % i)
 
-        return tmp
+        return sorted(tmp)
 
     def __get_cluster_input(self, samples, duplicate_threshold, sample_threshold, contamination_threshold) :
         ref_count = collections.Counter()
@@ -305,18 +306,24 @@ class WorkFlow(object) :
         if not self.options['silva-fasta'] :
             self.log.info("aligning %s sequences with PAGAN ..." % (num_sequences))
             alignment,tree = p.phylogenetic_alignment(self.options['cluster-fasta'])
+            xmlfile = None
         else :
             self.log.info("aligning %s sequences with PAGAN against SILVA ..." % (num_sequences))
-            alignment,tree = p.silva_phylogenetic_alignment(
-                                                    self.options['silva-fasta'], 
-                                                    self.options['silva-tree'], 
-                                                    self.options['cluster-fasta'])
+            alignment,tree,xmlfile = p.silva_phylogenetic_alignment(self.options['silva-fasta'], 
+                                                                    self.options['silva-tree'], 
+                                                                    self.options['cluster-fasta'])
 
         os.rename(alignment, self.options['phylogeny-fasta'])
-        os.rename(tree, self.options['phylogeny-tree'])
+        os.rename(tree,      self.options['phylogeny-tree'])
+        
+        if xmlfile :
+            os.rename(xmlfile,   self.options['phylogeny-xml'])
 
         self.log.info("created %s" % self.options['phylogeny-fasta'])
         self.log.info("created %s" % self.options['phylogeny-tree'])
+        
+        if xmlfile :
+            self.log.info("created %s" % self.options['phylogeny-xml'])
 
         return 0
 
@@ -333,6 +340,16 @@ class WorkFlow(object) :
 
     def heatmap(self) :
         self.log.info("creating heatmap using %s and %s" % (self.options['cluster-biom'], self.options['phylogeny-tree']))
-        phylogenetic_heatmap(self.options['cluster-biom'], self.options['phylogeny-tree'], self.options['output-prefix'] + '.pdf')
+        
+        phylogenetic_heatmap(self.options['cluster-biom'], 
+                             self.options['phylogeny-tree'], 
+                             self.options['output-prefix'] + '.pdf')
+        
         print "wrote %s.pdf" % self.options['output-prefix']
         return 0
+
+    def wasabi(self) :
+        return view_in_wasabi(self.options['phylogeny-xml'], 
+                              basename(self.options['outdir']), 
+                              self.options['wasabi-url'])
+

@@ -103,6 +103,10 @@ def species_name_transform(species) :
     new_species = []
 
     for s in species :
+        if s.endswith('unknown') :
+            new_species.append('Unknown')
+            continue
+
         tmp = s.split('_')
         identity = "(%s%%)" % tmp[-1]
         new_species.append(' '.join(tmp[1:-1] + [identity]))
@@ -111,6 +115,10 @@ def species_name_transform(species) :
 
 def prune_tree(tree, species_names) :
     subtree,distance = tree
+
+    #print subtree
+    #print distance
+    #print ""
 
     if isinstance(subtree, str) :
         if subtree in species_names :
@@ -224,8 +232,9 @@ def draw_heatmap(context, count_data, x_start, y_start, block_size) :
 def draw_species_labels(context, species, x_start, y_start, block_size) :
     context.set_source_rgba(0.0, 0.0, 0.0, 1.0)    
 
+    tmp = block_size - context.text_extents("Gg")[3] - 1
+
     for ind,s in enumerate(species) :
-        tmp = block_size - context.text_extents(s)[3]
         context.move_to(x_start, y_start + ((ind + 1) * block_size) - tmp)
         context.text_path(s)
         context.fill()

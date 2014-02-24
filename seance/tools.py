@@ -203,7 +203,10 @@ class Pagan(ExternalProgram) :
             self.log.error(str(epe))
             sys.exit(1)
 
-        return out_fname + ".pruned.fas", out_fname + ".pruned.tre"
+        for f in [ queries + '.silva.' + i for i in ['fas','nhx_tree','xml'] ] :
+            os.remove(f)
+
+        return out_fname + ".pruned.fas", out_fname + ".pruned.tre", out_fname + ".pruned.xml"
 
 class Aligner1D(object) :
     def __init__(self) :

@@ -34,16 +34,17 @@ class Newick(runtime.Parser):
             return (ID, float(NUM))
         else: # == '"\\\\("'
             self._scan('"\\\\("', context=_context)
-            result = []
+            result = [] ; distance = 0.0
             tree = self.tree(_context)
             self._scan('","', context=_context)
             result.append(tree)
             tree = self.tree(_context)
             self._scan('"\\\\)"', context=_context)
             result.append(tree)
-            self._scan('":"', context=_context)
-            NUM = self._scan('NUM', context=_context)
-            return (result, float(NUM))
+            if self._peek('":"', '";"', '","', '"\\\\)"', context=_context) == '":"':
+                self._scan('":"', context=_context)
+                NUM = self._scan('NUM', context=_context)
+            return (result, float(NUM if 'NUM' in locals() else 0.0))
 
 
 def parse(rule, text):

@@ -35,7 +35,7 @@ def get_default_options(fillin=False) :
             'maxhomopolymer'    : 8,
             'chimeras'          : False,
 
-            'total-duplicate-threshold'    : 1,
+            'total-duplicate-threshold'     : 1,
             'sample-threshold'              : 2,
             'duplicate-threshold'           : 1,
             'otu-similarity'                : 0.99,
@@ -48,9 +48,12 @@ def get_default_options(fillin=False) :
             'cluster-biom'      : None,
             'phylogeny-fasta'   : None,
             'phylogeny-tree'    : None,
+            'phylogeny-xml'     : None,
 
             'silva-fasta'       : None,
             'silva-tree'        : None,
+
+            'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
 
             'verbose'           : False
            }
@@ -76,8 +79,11 @@ def apply_output_prefix(d, command='all') :
     if not d['phylogeny-tree'] :
         d['phylogeny-tree']  = tmp + '.phylogeny.tree'
 
+    if not d['phylogeny-xml'] :
+        d['phylogeny-xml'] = tmp + '.phylogeny.xml'
+
 def get_all_programs() :
-    return ['sff2fastq', 'pagan', 'raxml', 'exonerate', 'uchime', 'blastn', 'ampliconnoise']
+    return ['sff2fastq', 'pagan', 'raxml', 'bppphysamp', 'exonerate', 'uchime', 'blastn', 'ampliconnoise']
 
 def get_required_programs(command, options) :
     tmp = []
@@ -110,13 +116,10 @@ def get_required_programs(command, options) :
         if not options['silva-fasta'] :
             tmp.append('raxml')
 
-    elif command == 'heatmap' :
-        pass
-
     return tmp
 
 def get_commands() :
-    return ['preprocess', 'cluster', 'phylogeny', 'heatmap']
+    return ['preprocess', 'cluster', 'phylogeny', 'heatmap', 'wasabi']
 
 def bold(s) :
     return "\033[1m%s\033[0m" % s
@@ -170,19 +173,28 @@ Legal commands are %s (see below for options).
                     --blastcentroids        (default = %s)
                     --mergeblasthits        (default = %s)
                     --nohomopolymer         (default = %s)
-                    --output=FILEPREFIX     (default = %s{.cluster.fasta, .cluster.biom})
+                    --output=FILEPREFIX     (default = %s{.cluster.fasta, 
+                                                          .cluster.biom})
 
     Phylogeny options:
         -o DIR      --outdir=DIR            (default = %s)
         -m FILE     --metadata=FILE         (default = %s)
                     --clusters=FILE         (default = %s)
         -s FILE     --silva=FILEPREFIX      (default = %s, expects FILEPREFIX{.fasta, .tree})
-                    --output=FILEPREFIX     (default = %s{.phylogeny.fasta, .phylogeny.tree})
+                    --output=FILEPREFIX     (default = %s{.phylogeny.fasta, 
+                                                          .phylogeny.tree, 
+                                                          .phylogeny.xml})
 
     Heatmap options:
+        -o DIR      --outdir=DIR            (default = %s)
                     --biom=FILE             (default = %s)
                     --tree=FILE             (default = %s)
                     --output=FILE           (default = %s.pdf)
+
+    Wasabi options:
+        -o DIR      --outdir=DIR            (default = %s)
+                    --xml=FILE              (default = %s)
+                    --url=URL               (default = %s)
 
     Misc options:
         -v          --verbose               (default = %s)
@@ -220,9 +232,13 @@ Legal commands are %s (see below for options).
         str(options['cluster-fasta']),
         str(options['silva-fasta']),
         str(options['output-prefix']),
+        str(options['outdir']),
         str(options['cluster-biom']),
         str(options['phylogeny-tree']),
         str(options['output-prefix']),
+        str(options['outdir']),
+        str(options['phylogeny-xml']),
+        str(options['wasabi-url']),
         str(options['verbose'])
       )
 
@@ -303,7 +319,9 @@ def parse_args(args) :
                             "output=",
                             "biom=",
                             "tree=",
-                            "clusters="
+                            "clusters=",
+                            "xml=",
+                            "url="
                         ]
                     )
 
@@ -399,6 +417,12 @@ def parse_args(args) :
         elif o in ('--output') :
             options['output-prefix'] = a
 
+        elif o in ('--xml') :
+            options['phylogeny-xml'] = a
+
+        elif o in ('--url') :
+            options['wasabi-url'] = a
+
         else :
             assert False, "unhandled option %s" % o
 
@@ -487,6 +511,9 @@ def main() :
     
     elif command == 'heatmap' :
         return wf.heatmap()
+
+    elif command == 'wasabi' :
+        return wf.wasabi()
 
     return 1
 
