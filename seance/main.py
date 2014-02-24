@@ -1,14 +1,15 @@
-import sys
 import os
 import getopt
 import logging
 
+from sys import argv, exit, stderr
 from os.path import splitext, join
 
 from seance.workflow import WorkFlow
 from seance.system import System
 
 
+__program__ = "seance"
 verbose_level = logging.DEBUG # logging.INFO
 default_dir = './out_dir'
 default_prefix = 'seance'
@@ -138,21 +139,33 @@ def list_sentence(l) :
         return "".join(l)
     return "%s and %s" % (', '.join(l[:-1]), l[-1])
 
-def usage() :
+def usage(command='all') :
+    global __program__
+
     options = get_default_options(True)
+    outdir = options['outdir']
 
-    print >> sys.stderr, """Usage: %s command [OPTIONS] <sff files>
-
+    print >> stderr, """Usage: %s <command> [OPTIONS] <sff files>
 Legal commands are %s (see below for options).
-%s assumes that the following programs are \ninstalled: %s.
-
-    Preprocess options:
+%s assumes that the following programs are installed: %s.\n""" % \
+               (bold(__program__),
+                list_sentence(quote_all(bold_all(get_commands()))), 
+                bold(__program__),
+                list_sentence(bold_all(get_all_programs())))
+    
+    print >> stderr, """    Common options:
         -o DIR      --outdir=DIR            (default = %s)
+        -m FILE     --metadata=FILE         (default = %s)
+        -v          --verbose\n""" % \
+                (str(options['outdir']),
+                 str(options['metadata']))
 
-        -d          --denoise               (default = %s)
+    if command in ('preprocess','all') :
+        print >> stderr, """    Preprocess options:
         -p SEQ      --forwardprimer=SEQ     (default = %s)
         -r SEQ      --reverseprimer=SEQ     (default = %s)
         -k          --clipprimers           (default = %s)
+
         -e NUM      --miderrors=NUM         (default = %s)
         -g NUM      --midlength=NUM         (default = %s)
 
@@ -161,11 +174,24 @@ Legal commands are %s (see below for options).
         -w NUM      --windowlength=NUM      (default = %s)
         -x NUM      --maxhomopolymer=NUM    (default = %s)
         -n          --removeambiguous       (default = %s)
-                    --chimeras              (default = %s)
 
-    Cluster options:
-        -o DIR      --outdir=DIR            (default = %s)
-        -m FILE     --metadata=FILE         (default = %s)
+        -d          --denoise               (default = %s)
+                    --chimeras              (default = %s)\n""" % \
+               (str(options['forwardprimer']),
+                str(options['reverseprimer']),
+                str(options['clipprimers']),
+                str(options['miderrors']),
+                str(options['midlength']),
+                str(options['length']),
+                str(options['quality']), 
+                str(options['windowlength']),
+                str(options['maxhomopolymer']),
+                str(options['removeambiguous']), 
+                str(options['denoise']),
+                str(options['chimeras']))
+
+    if command in ('cluster','all') :
+        print >> stderr, """    Cluster options:
         -a NUM      --totalduplicates=NUM   (default = %s)
         -b NUM      --samples=NUM           (default = %s)
         -c NUM      --duplicates=NUM        (default = %s)
@@ -174,73 +200,42 @@ Legal commands are %s (see below for options).
                     --mergeblasthits        (default = %s)
                     --nohomopolymer         (default = %s)
                     --output=FILEPREFIX     (default = %s{.cluster.fasta, 
-                                                          .cluster.biom})
+                                                          .cluster.biom})\n""" % \
+               (str(options['total-duplicate-threshold']),
+                str(options['sample-threshold']), 
+                str(options['duplicate-threshold']),
+                str(options['otu-similarity']),
+                str(options['blast-centroids']),
+                str(options['merge-blast-hits']),
+                str(options['no-homopolymer-correction']),
+                options['output-prefix'])
 
-    Phylogeny options:
-        -o DIR      --outdir=DIR            (default = %s)
-        -m FILE     --metadata=FILE         (default = %s)
+    if command in ('phylogeny','all') :
+        print >> stderr, """    Phylogeny options:
                     --clusters=FILE         (default = %s)
         -s FILE     --silva=FILEPREFIX      (default = %s, expects FILEPREFIX{.fasta, .tree})
                     --output=FILEPREFIX     (default = %s{.phylogeny.fasta, 
                                                           .phylogeny.tree, 
-                                                          .phylogeny.xml})
+                                                          .phylogeny.xml})\n""" % \
+               (options['cluster-fasta'],
+                options['silva-fasta'],
+                options['output-prefix'])
 
-    Heatmap options:
-        -o DIR      --outdir=DIR            (default = %s)
+    if command in ('heatmap','all') :
+        print >> stderr, """    Heatmap options:
                     --biom=FILE             (default = %s)
                     --tree=FILE             (default = %s)
-                    --output=FILE           (default = %s.pdf)
+                    --output=FILE           (default = %s.pdf)\n""" % \
+               (options['cluster-biom'],
+                options['phylogeny-tree'],
+                options['output-prefix'])
 
-    Wasabi options:
-        -o DIR      --outdir=DIR            (default = %s)
+    if command in ('wasabi','all') :
+        print >> stderr, """    Wasabi options:
                     --xml=FILE              (default = %s)
-                    --url=URL               (default = %s)
-
-    Misc options:
-        -v          --verbose               (default = %s)
-        -h          --help
-""" % (
-        sys.argv[0],
-        list_sentence(quote_all(bold_all(get_commands()))),
-        sys.argv[0],
-        list_sentence(bold_all(get_all_programs())),
-        str(options['outdir']),
-        str(options['denoise']),                 
-        str(options['forwardprimer']),
-        str(options['reverseprimer']),
-        str(options['clipprimers']),
-        str(options['miderrors']),
-        str(options['midlength']),
-        str(options['length']),
-        str(options['quality']), 
-        str(options['windowlength']),
-        str(options['maxhomopolymer']),
-        str(options['removeambiguous']), 
-        str(options['chimeras']),
-        str(options['outdir']),
-        str(options['metadata']),
-        str(options['total-duplicate-threshold']),
-        str(options['sample-threshold']), 
-        str(options['duplicate-threshold']),
-        str(options['otu-similarity']),
-        str(options['blast-centroids']),
-        str(options['merge-blast-hits']),
-        str(options['no-homopolymer-correction']),
-        str(options['output-prefix']),
-        str(options['outdir']),
-        str(options['metadata']),
-        str(options['cluster-fasta']),
-        str(options['silva-fasta']),
-        str(options['output-prefix']),
-        str(options['outdir']),
-        str(options['cluster-biom']),
-        str(options['phylogeny-tree']),
-        str(options['output-prefix']),
-        str(options['outdir']),
-        str(options['phylogeny-xml']),
-        str(options['wasabi-url']),
-        str(options['verbose'])
-      )
+                    --url=URL               (default = %s)\n""" % \
+               (options['phylogeny-xml'],
+                options['wasabi-url'])
 
 def setup_logging(verbose) :
     global verbose_level
@@ -266,9 +261,9 @@ def expect_cast(parameter, argument, func) :
         return func(argument)
 
     except ValueError, ve :
-        print >> sys.stderr, "Problem parsing argument for %s: %s\n" % (parameter, str(ve))
+        print >> stderr, "Problem parsing argument for %s: %s\n" % (parameter, str(ve))
         usage()
-        sys.exit(1)
+        exit(1)
 
 def expect_int(parameter, argument) :
     return expect_cast(parameter, argument, int)
@@ -280,12 +275,12 @@ def expect_iupac(parameter, argument) :
     tmp = argument.upper()
     for i in tmp :
         if i not in "TAGCRYSWKMBDHVN" :
-            print >> sys.stderr, "Problem parsing argument for %s: contains illegal character '%s'\n" % (parameter, i)
-            sys.exit(1)
+            print >> stderr, "Problem parsing argument for %s: contains illegal character '%s'\n" % (parameter, i)
+            exit(1)
 
     return tmp
 
-def parse_args(args) :
+def parse_args(command, args) :
     options = get_default_options()
 
     try :
@@ -326,14 +321,14 @@ def parse_args(args) :
                     )
 
     except getopt.GetoptError, err :
-        print >> sys.stderr, str(err) + "\n"
+        print >> stderr, str(err) + "\n"
         usage()
-        sys.exit(-1)
+        exit(1)
 
     for o,a in opts :
         if o in ('-h', '--help') :
-            usage()
-            sys.exit(0)
+            usage(command)
+            exit(0)
 
         elif o in ('-v', '--verbose') :
             options['verbose'] = True
@@ -437,60 +432,60 @@ def check_options(command, options) :
     apply_output_prefix(options, command)
 
     if not system.check_directory(options['outdir'], create=True) :
-        sys.exit(1)
+        exit(1)
 
     if command == 'preprocess' :
         if not system.check_files(options['input-files']) :
-            sys.exit(1)
+            exit(1)
 
         if options['denoise'] and (options['forwardprimer'] is None) :
-            print >> sys.stderr, "Error: forward primer must be specified with denoise flag"
-            sys.exit(1)
+            print >> stderr, "Error: forward primer must be specified with denoise flag"
+            exit(1)
 
     elif command == 'cluster' :
         if options['metadata'] is None :
-            print >> sys.stderr, "Error: you must specify a metadata file"
-            sys.exit(1)
+            print >> stderr, "Error: you must specify a metadata file"
+            exit(1)
 
         if not system.check_file(options['metadata']) :
-            sys.exit(1)
+            exit(1)
 
         if options['sample-threshold'] <= 0 :
-            print >> sys.stderr, "Error: sample-threshold must be > 0 (read %d)" % options['sample-threshold']
-            sys.exit(1)
+            print >> stderr, "Error: sample-threshold must be > 0 (read %d)" % options['sample-threshold']
+            exit(1)
 
         if options['total-duplicate-threshold'] <= 0 :
-            print >> sys.stderr, "Error: total-duplicate-threshold must be > 0 (read %d)" % options['total-duplicate-threshold']
-            sys.exit(1)
+            print >> stderr, "Error: total-duplicate-threshold must be > 0 (read %d)" % options['total-duplicate-threshold']
+            exit(1)
 
         if options['otu-similarity'] < 0.0 or options['otu-similarity'] > 1.0 :
-            print >> sys.stderr, "Error: similarity must be between 0.0 and 1.0 (read %.2f)" % options['otu-similarity']
-            sys.exit(1)
+            print >> stderr, "Error: similarity must be between 0.0 and 1.0 (read %.2f)" % options['otu-similarity']
+            exit(1)
 
     elif command == 'phylogeny' :
         if not system.check_file(options['cluster-fasta']) :
-            sys.exit(1)
+            exit(1)
 
         if options['silva-fasta'] :
             if not system.check_files([options['silva-fasta'], options['silva-tree']]) :
-                sys.exit(1)
+                exit(1)
 
     elif command == 'heatmap' :
         if not system.check_files([options['cluster-biom'], options['phylogeny-tree']]) :
-            sys.exit(1)
+            exit(1)
 
 def main() :
-    if (len(sys.argv) < 2) or (sys.argv[1] in ('-h', '--help', 'help')) :
+    if (len(argv) < 2) or (argv[1] in ('-h', '--help', 'help')) :
         usage()
         return 1
 
-    command = sys.argv[1]
+    command = argv[1]
     if command not in get_commands() :
-        print >> sys.stderr, "Error: unknown command '%s'" % command
+        print >> stderr, "Error: unknown command '%s'" % command
         usage()
         return 1
 
-    options = parse_args(sys.argv[2:])
+    options = parse_args(command, argv[2:])
     setup_logging(options['verbose'])
     check_options(command, options)
 
@@ -519,7 +514,7 @@ def main() :
 
 if __name__ == '__main__' :
     try :
-        sys.exit(main())
+        exit(main())
     except KeyboardInterrupt :
-        print >> sys.stderr, "Killed by user"
+        print >> stderr, "Killed by user"
 
