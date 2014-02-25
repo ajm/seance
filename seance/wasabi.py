@@ -24,10 +24,8 @@ def _upload_to_wasabi(filename, name, url) :
     status,output = run(curl_command)
 
     if status != 0 :
-        raise Exception("curl failed")
-
-    #print curl_command
-    #print output
+        print >> stderr, "ERROR wasabi upload failed (curl err %d)" % status
+        exit(1)
 
     tmp = json.loads(output)
     return tmp['id'], tmp['name']

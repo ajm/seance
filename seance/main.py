@@ -11,7 +11,7 @@ from seance.system import System
 
 __program__ = "seance"
 verbose_level = logging.DEBUG # logging.INFO
-default_dir = './out_dir'
+default_dir = './out'
 default_prefix = 'seance'
 
 def get_default_options(fillin=False) :
@@ -30,9 +30,10 @@ def get_default_options(fillin=False) :
             'midlength'         : 5,
 
             'length'            : 250, 
+            'quality-method'    : 'min', # 'average', 'window', 'none'
             'quality'           : 25,
-            'windowlength'      : None,
-            'removeambiguous'   : False,
+            'windowlength'      : 10,
+            'removeambiguous'   : True,
             'maxhomopolymer'    : 8,
             'chimeras'          : False,
 
@@ -54,6 +55,7 @@ def get_default_options(fillin=False) :
             'silva-fasta'       : None,
             'silva-tree'        : None,
 
+            'heatmap-no-tree'   : False,
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
 
             'verbose'           : False
@@ -170,10 +172,12 @@ Legal commands are %s (see below for options).
         -g NUM      --midlength=NUM         (default = %s)
 
         -l NUM      --length=NUM            (default = %s)
+        -x NUM      --maxhomopolymer=NUM    (default = %s)
+        -n          --keepambiguous         (default = %s)
+
+                    --qualitymethod=X       (default = %s, options = (none, min, average, window))
         -q NUM      --quality=NUM           (default = %s)
         -w NUM      --windowlength=NUM      (default = %s)
-        -x NUM      --maxhomopolymer=NUM    (default = %s)
-        -n          --removeambiguous       (default = %s)
 
         -d          --denoise               (default = %s)
                     --chimeras              (default = %s)\n""" % \
@@ -183,10 +187,11 @@ Legal commands are %s (see below for options).
                 str(options['miderrors']),
                 str(options['midlength']),
                 str(options['length']),
+                str(options['maxhomopolymer']),
+                str(not options['removeambiguous']),
+                options['quality-method'],
                 str(options['quality']), 
                 str(options['windowlength']),
-                str(options['maxhomopolymer']),
-                str(options['removeambiguous']), 
                 str(options['denoise']),
                 str(options['chimeras']))
 
@@ -225,6 +230,7 @@ Legal commands are %s (see below for options).
         print >> stderr, """    Heatmap options:
                     --biom=FILE             (default = %s)
                     --tree=FILE             (default = %s)
+                    --notree
                     --output=FILE           (default = %s.pdf)\n""" % \
                (options['cluster-biom'],
                 options['phylogeny-tree'],
@@ -295,10 +301,11 @@ def parse_args(command, args) :
                             "miderrors=", 
                             "midlength=", 
                             "length=",
+                            "qualitymethod=",
                             "quality=",
                             "windowlength=",
                             "maxhomopolymer=",
-                            "removeambiguous",
+                            "keepambiguous",
                             "metadata=",
                             "totalduplicates=",
                             "samples=",
@@ -314,6 +321,7 @@ def parse_args(command, args) :
                             "output=",
                             "biom=",
                             "tree=",
+                            "notree",
                             "clusters=",
                             "xml=",
                             "url="
@@ -360,6 +368,15 @@ def parse_args(command, args) :
         elif o in ('-l', '--length') :
             options['length'] = expect_int("length", a)
         
+        elif o in ('--qualitymethod') :
+            methods = ['none', 'min', 'average', 'window']
+            if a in methods :
+                options['quality-method'] = a
+            else :
+                print >> stderr, "ERROR %s is not a valid quality method (valid options: %s)" % \
+                        (bold(a), list_sentence(bold_all(methods)))
+                exit(1)
+
         elif o in ('-q', '--quality') :
             options['quality'] = expect_int("quality", a)
 
@@ -369,8 +386,8 @@ def parse_args(command, args) :
         elif o in ('-x', '--maxhomopolymer') :
             options['maxhomopolymer'] = expect_int("maxhomopolymer", a)
 
-        elif o in ('-n', '--removeambiguous') :
-            options['removeambiguous'] = True
+        elif o in ('-n', '--keepambiguous') :
+            options['removeambiguous'] = False
 
         elif o in ('-a', '--totalduplicates') :
             options['total-duplicate-threshold'] = expect_int("total-duplicates", a)
@@ -417,6 +434,9 @@ def parse_args(command, args) :
 
         elif o in ('--url') :
             options['wasabi-url'] = a
+
+        elif o in ('--notree') :
+            options['heatmap-no-tree'] = True
 
         else :
             assert False, "unhandled option %s" % o
@@ -471,7 +491,11 @@ def check_options(command, options) :
                 exit(1)
 
     elif command == 'heatmap' :
-        if not system.check_files([options['cluster-biom'], options['phylogeny-tree']]) :
+        if not system.check_files([options['cluster-biom']]) : #, options['phylogeny-tree']]) :
+            exit(1)
+
+    elif command == 'wasabi' :
+        if not system.check_files([options['phylogeny-xml']]) :
             exit(1)
 
 def main() :

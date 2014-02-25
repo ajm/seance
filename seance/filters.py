@@ -76,6 +76,14 @@ class AmbiguousFilter(Filter) :
     def accept(self, seq) :
         return 'N' not in seq
 
+class MinimumQualityFilter(Filter) :
+    def __init__(self, qual) :
+        logging.getLogger('seance').info("created MinimumQualityFilter(qual=%d)" % (qual))
+        self.qual = qual
+
+    def accept(self, seq) :
+        return min(seq.qualities) >= self.qual
+
 class AverageQualityFilter(Filter) :
     def __init__(self, qual) :
         logging.getLogger('seance').info("created AverageQualityFilter(qual=%d)" % (qual))

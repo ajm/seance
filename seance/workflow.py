@@ -4,7 +4,8 @@ import collections
 import logging
 import operator
 
-from os.path import splitext,join,basename
+from sys import exit
+from os.path import splitext,join,basename,exists
 from glob import glob
 
 from seance.sample import Sample, MetadataSample
@@ -55,15 +56,20 @@ class WorkFlow(object) :
         if self.options['maxhomopolymer'] > 0 :
             mf.add(HomopolymerFilter(self.options['maxhomopolymer']))
 
-        if self.options['quality'] != None :
-            if self.options['windowlength'] != None :
+        qual = self.options['quality-method']
+
+        if qual == 'min' :
+            mf.add(MinimumQualityFilter(self.options['quality']))
+
+        elif qual == 'average' :
+            mf.add(AverageQualityFilter(self.options['quality']))
+
+        elif qual == 'window' :
                 mf.add(
                         WindowedQualityFilter(
                             self.options['quality'], 
                             self.options['windowlength'])
                       )
-            else :
-                mf.add(AverageQualityFilter(self.options['quality']))
 
         return mf
 
@@ -118,9 +124,7 @@ class WorkFlow(object) :
         p.start()
 
         for f in self.__get_files(self.options['input-files']) :
-            print "get mid on %s" % f.get_filename()
             mid = self.__mid_fastq(f)
-            print "mid = %s" % mid
 
             # does not like degenerate primers...
 #            if self.options['clipprimers'] :
@@ -130,6 +134,7 @@ class WorkFlow(object) :
 #                        #self.options['reverseprimer'])
             
             sample = Sample(f, 
+                        self.options['outdir'],
                         self.seqdb, 
                         self.__filters(mid),
                         chimeras=self.options['chimeras'])
@@ -153,7 +158,7 @@ class WorkFlow(object) :
                 self.log.warn("skipping %s, metadata missing..." % basename(sample))
                 continue
 
-            tmp.append(MetadataSample(FastqFile(sample), self.seqdb, md))
+            tmp.append(MetadataSample(FastqFile(sample), self.options['outdir'], self.seqdb, md))
             md_used.append(md['file'])
 
         # warn about used metadata
@@ -208,6 +213,10 @@ class WorkFlow(object) :
         self.seqdb = SequenceDB(preprocessed=True)
         samples = self.__preprocessed_samples()
         
+        if self.seqdb.num_sequences() == 0 :
+            self.log.error("no sequences loaded")
+            exit(1)
+
         # to prove the rebuild of the database is the same
         #for sample in samples :
         #    sample.print_sample(extension=".rebuild")
@@ -340,10 +349,17 @@ class WorkFlow(object) :
 
     def heatmap(self) :
         self.log.info("creating heatmap using %s and %s" % (self.options['cluster-biom'], self.options['phylogeny-tree']))
+
+        if self.options['heatmap-no-tree'] :
+            self.options['phylogeny-tree'] = None
         
+        if self.options['phylogeny-tree'] is not None and not exists(self.options['phylogeny-tree']) :
+            self.log.warn("%s does not exist, drawing heatmap without tree" % self.options['phylogeny-tree'])
+            self.options['phylogeny-tree'] = None
+
         phylogenetic_heatmap(self.options['cluster-biom'], 
-                             self.options['phylogeny-tree'], 
-                             self.options['output-prefix'] + '.pdf')
+                             tree=self.options['phylogeny-tree'], 
+                             output=self.options['output-prefix'] + '.pdf')
         
         print "wrote %s.pdf" % self.options['output-prefix']
         return 0

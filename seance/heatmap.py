@@ -40,26 +40,30 @@ def preprocess_data(tree_data, biom_data) :
     new_samples = [ samples[i]['id'] for i in seen_samples ]
     new_species = [ species[i]['id'] for i in seen_species ]
 
-    #
-    # zero count species need to be pruned from the tree data
-    #
-    new_tree = prune_tree(tree_data, new_species)
+    if tree_data is not None :
+        #
+        # zero count species need to be pruned from the tree data
+        #
+        new_tree = prune_tree(tree_data, new_species)
 
-    #
-    # resort non-zero species list into order from tree
-    #
-    tree_order = []
-    get_dfs_order(new_tree, tree_order)
+        #
+        # resort non-zero species list into order from tree
+        #
+        tree_order = []
+        get_dfs_order(new_tree, tree_order)
 
 #    print >> stderr, "species in count data:", len(seen_species)
 #    print >> stderr, "species in tree data:", len(tree_order)
 
-    tmp = {}
-    for name,index in zip(new_species, seen_species) :
-        tmp[name] = index
+        tmp = {}
+        for name,index in zip(new_species, seen_species) :
+            tmp[name] = index
 
-    seen_species = [ tmp[i] for i in tree_order ]
-    new_species = tree_order
+        seen_species = [ tmp[i] for i in tree_order ]
+        new_species = tree_order
+    
+    else :
+        new_tree = None
 
     #
     # change the count data to reflect the ordering from the tree
@@ -257,28 +261,20 @@ def draw_sample_labels(context, samples, x_start, y_start, block_size) :
         context.fill()
         context.identity_matrix()
 
-def heatmap(biomfile, treefile, pdffile, draw_guidelines=False) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False) :
     global x_scalar, y_scalar, margin, tree_extent
 
-    newick_data = parse_newick(treefile)
+    newick_data = parse_newick(tree) if tree is not None else None
     biom_data = parse_biom(biomfile)
 
     data = preprocess_data(newick_data, biom_data)
 
     # setup cairo with dummy dimensions
-    surface = cairo.PDFSurface(pdffile, 0, 0)
+    surface = cairo.PDFSurface(output, 0, 0)
     context = cairo.Context(surface)
     
     context.select_font_face("monospace")
     context.set_font_size(8)
-
-    #
-    #context.scale(1, 1)
-    #context.set_line_width(1)
-    #context.set_source_rgb(0, 0, 0)
-    #context.set_line_cap(cairo.LINE_CAP_BUTT)
-    #context.set_line_join(cairo.LINE_JOIN_ROUND)
-    #context.set_dash([10, 5])
 
     # calculate new variables
     block_len = 10
@@ -290,26 +286,31 @@ def heatmap(biomfile, treefile, pdffile, draw_guidelines=False) :
     max_species_label = max_text_length(data['species'], context)
     max_sample_label = max_text_length(data['samples'], context)
 
-    num_species, phylogenetic_height = dfs_dimensions(data['tree'], 0)
+    # tree might not be specified
+    if tree is None :
+        num_species = len(data['species'])
+        heatmap_left_edge = margin
+
+        heatmap_width = len(data['samples']) * block_len
+        heatmap_height = num_species * block_len
+
+    else :
+        num_species, phylogenetic_height = dfs_dimensions(data['tree'], 0)
     
-    heatmap_width = len(data['samples']) * block_len
-    heatmap_height = num_species * block_len
+        tree_width = tree_blocks * block_len
+        tree_extent = margin + tree_width
 
-    tree_width = tree_blocks * block_len
-    tree_height = heatmap_height
-    tree_extent = margin + tree_width 
+        heatmap_width = len(data['samples']) * block_len
+        heatmap_height = num_species * block_len
 
-    width =  margin + tree_width + spacer + heatmap_width + spacer + max_species_label + margin
+        x_scalar = tree_width / float(phylogenetic_height)
+        y_scalar = heatmap_height / float(num_species)
+
+        heatmap_left_edge = margin + tree_width + spacer
+
+
+    width =  heatmap_left_edge + heatmap_width + spacer + max_species_label + margin
     height = margin + heatmap_height + spacer + max_sample_label + margin
-
-#    print >> stderr, "%d tip nodes in tree" % num_species
-#    print >> stderr, "tree height = %f" % height
-
-    x_scalar = tree_width / float(phylogenetic_height)
-    y_scalar = tree_height / float(num_species)
-
-#    print >> stderr, "x_scalar = %f" % x_scalar
-#    print >> stderr, "y_scalar = %f" % y_scalar
 
 
     # change dimensions
@@ -330,20 +331,20 @@ def heatmap(biomfile, treefile, pdffile, draw_guidelines=False) :
             context.line_to(width - margin, margin + (i * block_len))
 
         # draw vertical guides
-        tmp = margin + tree_width + spacer
         for i in range(len(data['samples']) + 1) :
-            context.move_to(tmp + i * block_len, margin)
-            context.line_to(tmp + i * block_len, height - margin)
+            context.move_to(heatmap_left_edge + i * block_len, margin)
+            context.line_to(heatmap_left_edge + i * block_len, height - margin)
 
         # spacers
-        context.move_to(margin + tree_width, margin)
-        context.line_to(margin + tree_width, margin + heatmap_height)
+        if tree is not None :
+            context.move_to(margin + tree_width, margin)
+            context.line_to(margin + tree_width, margin + heatmap_height)
     
-        context.move_to(margin + tree_width + spacer + heatmap_width + spacer, margin)
-        context.line_to(margin + tree_width + spacer + heatmap_width + spacer, margin + heatmap_height)
+        context.move_to(heatmap_left_edge + heatmap_width + spacer, margin)
+        context.line_to(heatmap_left_edge + heatmap_width + spacer, margin + heatmap_height)
     
-        context.move_to(margin + tree_width + spacer, margin + heatmap_height + spacer)
-        context.line_to(margin + tree_width + spacer + heatmap_width, margin + heatmap_height + spacer)
+        context.move_to(heatmap_left_edge, margin + heatmap_height + spacer)
+        context.line_to(heatmap_left_edge + heatmap_width, margin + heatmap_height + spacer)
 
         context.stroke()
 
@@ -353,35 +354,35 @@ def heatmap(biomfile, treefile, pdffile, draw_guidelines=False) :
     context.set_line_join(cairo.LINE_JOIN_ROUND)    
     context.set_source_rgb(0, 0, 0)
 
-    dfs_draw(context, data['tree'], 0, margin)
+    if tree is not None :
+        dfs_draw(context, data['tree'], 0, margin)
 
     # draw heatmap
     context.set_line_width(1)
     context.set_line_cap(cairo.LINE_CAP_BUTT)
     context.set_line_join(cairo.LINE_JOIN_MITER)
 
-    draw_heatmap(context, data['counts'], margin + tree_width + spacer, margin, block_len)
+    draw_heatmap(context, data['counts'], heatmap_left_edge, margin, block_len)
 
     # draw gridlines
     # horizontal 
-    tmp = margin + tree_width + spacer
     context.set_source_rgba(0.5, 0.5, 0.5, 0.5)
     for i in range(1, int(num_species)) :
         y = margin + (i * block_len)
-        context.move_to(tmp, y)
-        context.line_to(tmp + heatmap_width, y)
+        context.move_to(heatmap_left_edge, y)
+        context.line_to(heatmap_left_edge + heatmap_width, y)
 
     # vertical 
     for i in range(1, len(data['samples'])) :
-        context.move_to(tmp + (i * block_len), margin)
-        context.line_to(tmp + (i * block_len), margin + heatmap_height)
+        context.move_to(heatmap_left_edge + (i * block_len), margin)
+        context.line_to(heatmap_left_edge + (i * block_len), margin + heatmap_height)
 
-    context.rectangle(tmp, margin, heatmap_width, heatmap_height)
+    context.rectangle(heatmap_left_edge, margin, heatmap_width, heatmap_height)
     context.stroke()
 
-    draw_species_labels(context, data['species'], margin + tree_width + spacer + heatmap_width + spacer, margin, block_len)
+    draw_species_labels(context, data['species'], heatmap_left_edge + heatmap_width + spacer, margin, block_len)
 
-    draw_sample_labels(context, data['samples'], margin + tree_width + spacer, margin + heatmap_height + spacer, block_len)
+    draw_sample_labels(context, data['samples'], heatmap_left_edge, margin + heatmap_height + spacer, block_len)
 
     context.save()
     surface.finish()
@@ -396,7 +397,7 @@ def main() :
     biomfile = argv[1]
     treefile = argv[2]
 
-    return heatmap(biomfile, treefile, "tree.pdf")
+    return heatmap(biomfile, tree=treefile, output="tree.pdf")
 
 if __name__ == '__main__' :
     try :

@@ -14,9 +14,10 @@ from seance.db import SequenceDB
 
 
 class Sample(object) :
-    def __init__(self, fastq, seqdb, filters=None, chimeras=False) :
+    def __init__(self, fastq, outdir, seqdb, filters=None, chimeras=False) :
         self.log = logging.getLogger('seance')
         self.fastq = fastq
+        self.outdir = outdir
         self.filters = filters
         self.db = seqdb
 
@@ -85,7 +86,7 @@ class Sample(object) :
         self.log.info("%d sequences in sample (minus chimeras)" % len(self))
 
     def print_sample(self, duplicate_label=" NumDuplicates", extension=".sample") :
-        f = open(self.fastq.get_filename() + extension, 'w')
+        f = open(os.path.join(self.outdir, self.fastq.get_basename() + extension), 'w')
 
         for key,freq in self.seqcounts.most_common() :
             if key not in self.chimeras :
@@ -105,8 +106,8 @@ class Sample(object) :
 
 @total_ordering
 class MetadataSample(Sample) :
-    def __init__(self, fastq, seqdb, metadata) :
-        super(MetadataSample, self).__init__(fastq, seqdb)
+    def __init__(self, fastq, outdir, seqdb, metadata) :
+        super(MetadataSample, self).__init__(fastq, outdir, seqdb)
         self.metadata = metadata
 
     def description(self) :
