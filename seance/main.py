@@ -39,7 +39,7 @@ def get_default_options(fillin=False) :
 
             'total-duplicate-threshold'     : 1,
             'sample-threshold'              : 2,
-            'duplicate-threshold'           : 1,
+            'duplicate-threshold'           : 2,
             'otu-similarity'                : 0.99,
             'blast-centroids'               : False,
             'merge-blast-hits'              : False,
@@ -57,6 +57,7 @@ def get_default_options(fillin=False) :
 
             'heatmap-no-tree'   : False,
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
+            'wasabi-user'       : None,
 
             'verbose'           : False
            }
@@ -157,10 +158,8 @@ Legal commands are %s (see below for options).
     
     print >> stderr, """    Common options:
         -o DIR      --outdir=DIR            (default = %s)
-        -m FILE     --metadata=FILE         (default = %s)
         -v          --verbose\n""" % \
-                (str(options['outdir']),
-                 str(options['metadata']))
+                (str(options['outdir']))
 
     if command in ('preprocess','all') :
         print >> stderr, """    Preprocess options:
@@ -197,16 +196,21 @@ Legal commands are %s (see below for options).
 
     if command in ('cluster','all') :
         print >> stderr, """    Cluster options:
+        -m FILE     --metadata=FILE         (default = %s)
+
         -a NUM      --totalduplicates=NUM   (default = %s)
         -b NUM      --samples=NUM           (default = %s)
         -c NUM      --duplicates=NUM        (default = %s)
+        
         -t REAL     --similarity=REAL       (default = %s)
+        
                     --blastcentroids        (default = %s)
                     --mergeblasthits        (default = %s)
                     --nohomopolymer         (default = %s)
                     --output=FILEPREFIX     (default = %s{.cluster.fasta, 
                                                           .cluster.biom})\n""" % \
-               (str(options['total-duplicate-threshold']),
+               (options['metadata'],
+                str(options['total-duplicate-threshold']),
                 str(options['sample-threshold']), 
                 str(options['duplicate-threshold']),
                 str(options['otu-similarity']),
@@ -239,8 +243,10 @@ Legal commands are %s (see below for options).
     if command in ('wasabi','all') :
         print >> stderr, """    Wasabi options:
                     --xml=FILE              (default = %s)
+                    --user=USER
                     --url=URL               (default = %s)\n""" % \
                (options['phylogeny-xml'],
+                options['wasabi-user'],
                 options['wasabi-url'])
 
 def setup_logging(verbose) :
@@ -324,7 +330,8 @@ def parse_args(command, args) :
                             "notree",
                             "clusters=",
                             "xml=",
-                            "url="
+                            "url=",
+                            "user="
                         ]
                     )
 
@@ -435,6 +442,9 @@ def parse_args(command, args) :
         elif o in ('--url') :
             options['wasabi-url'] = a
 
+        elif o in ('--user') :
+            options['wasabi-user'] = a
+
         elif o in ('--notree') :
             options['heatmap-no-tree'] = True
 
@@ -458,10 +468,6 @@ def check_options(command, options) :
         if not system.check_files(options['input-files']) :
             exit(1)
 
-        if options['denoise'] and (options['forwardprimer'] is None) :
-            print >> stderr, "Error: forward primer must be specified with denoise flag"
-            exit(1)
-
     elif command == 'cluster' :
         if options['metadata'] is None :
             print >> stderr, "Error: you must specify a metadata file"
@@ -470,16 +476,14 @@ def check_options(command, options) :
         if not system.check_file(options['metadata']) :
             exit(1)
 
-        if options['sample-threshold'] <= 0 :
-            print >> stderr, "Error: sample-threshold must be > 0 (read %d)" % options['sample-threshold']
-            exit(1)
+        for i in ('duplicate-threshold', 'total-duplicate-threshold', 'sample-threshold') :
+            if options[i] <= 0 :
+                print >> stderr, "Error: %s must be > 0 (read %d)" % (i, options[i])
+                exit(1)
 
-        if options['total-duplicate-threshold'] <= 0 :
-            print >> stderr, "Error: total-duplicate-threshold must be > 0 (read %d)" % options['total-duplicate-threshold']
-            exit(1)
-
-        if options['otu-similarity'] < 0.0 or options['otu-similarity'] > 1.0 :
-            print >> stderr, "Error: similarity must be between 0.0 and 1.0 (read %.2f)" % options['otu-similarity']
+        # i think pagan's sensitivity limit is ~80%
+        if options['otu-similarity'] < 0.8 or options['otu-similarity'] > 1.0 :
+            print >> stderr, "Error: similarity must be between 0.8 and 1.0 (read %.2f)" % options['otu-similarity']
             exit(1)
 
     elif command == 'phylogeny' :
@@ -491,10 +495,14 @@ def check_options(command, options) :
                 exit(1)
 
     elif command == 'heatmap' :
-        if not system.check_files([options['cluster-biom']]) : #, options['phylogeny-tree']]) :
+        if not system.check_files([options['cluster-biom']]) :
             exit(1)
 
     elif command == 'wasabi' :
+        if not options['wasabi-user'] :
+            print >> stderr, "Error: you must specify your wasabi username!\n"
+            exit(1)
+
         if not system.check_files([options['phylogeny-xml']]) :
             exit(1)
 

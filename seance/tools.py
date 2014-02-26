@@ -11,7 +11,7 @@ import collections
 
 from os.path import abspath, join, dirname
 from seance.filetypes import SffFile, FastqFile
-from seance.datatypes import IUPAC
+from seance.datatypes import IUPAC, Sequence
 
 class ExternalProgramError(Exception) :
     pass
@@ -581,6 +581,17 @@ class AmpliconNoise(ExternalProgram) :
         # output with correct file name
         fout = open(output_name, 'w')
         f = FastqFile(outfile + "_cd.fa")
+
+#        seq2qual = {}
+#        q = open(outfile + "_cd.qual")
+#        seqname = None
+#        for line in q :
+#            if line.startswith('>') :
+#                seqname = line.rstrip()[1:]
+#            else :
+#                seq2qual[seqname] = ''.join([ Sequence.int_to_quality(int(i)) for i in line.split() ])
+#        q.close()
+
         f.open()
 
         count = 0

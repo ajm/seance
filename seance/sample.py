@@ -32,6 +32,11 @@ class Sample(object) :
         else :
             self.__raw_load()
 
+    def remove_less_than(self, threshold) :
+        for i in self.seqcounts.keys() :
+            if self.seqcounts[i] < threshold :
+                del self.seqcounts[i]
+
     def __contains__(self, seqkey) :
         return seqkey in self.seqcounts
 

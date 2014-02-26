@@ -172,12 +172,12 @@ class WorkFlow(object) :
         ref_count = collections.Counter()
         cluster_input_keys = set()
 
+        for sample in samples :
+            sample.remove_less_than(contamination_threshold)
+
         # first collect keys for all sequences that fit number of reads
         for sample in samples :
             for key,freq in sample.seqcounts.most_common() :
-                if freq < contamination_threshold :
-                    continue
-
                 if self.seqdb.get(key).duplicates >= duplicate_threshold :
                     ref_count[key] += 1
 
@@ -196,12 +196,10 @@ class WorkFlow(object) :
                 count = 0
 
                 for key,freq in sample.seqcounts.most_common() :
-                    if freq < contamination_threshold :
-                        continue
-
                     if self.seqdb.get(key).duplicates >= duplicate_threshold :
-                        cluster_input_keys.add(key)
-                        count += 1
+                        if key not in cluster_input_keys :
+                            cluster_input_keys.add(key)
+                            count += 1
 
                 self.log.info("allowing singletons for (%s) - added %d sequences" % \
                         (sample.description(), count))
@@ -367,5 +365,6 @@ class WorkFlow(object) :
     def wasabi(self) :
         return view_in_wasabi(self.options['phylogeny-xml'], 
                               basename(self.options['outdir']), 
-                              self.options['wasabi-url'])
+                              self.options['wasabi-url'],
+                              self.options['wasabi-user'])
 

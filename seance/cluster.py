@@ -81,6 +81,28 @@ class Cluster(object) :
     def distance2(self, aligned, homopolymer_correction) :
         leng = float(min(len(aligned[0]), len(aligned[1])))
 
+        # terminal homopolymer can cause problems
+        #
+        # pagan does 
+        # XYYYY
+        # X-YYY
+        #
+        # instead of 
+        # XYYYYZ
+        # XYYY-Z
+        if homopolymer_correction :
+            last = aligned[0][-1]
+
+            a0 = aligned[0].rstrip(last)
+            a1 = aligned[1].rstrip(last)
+
+            if (len(a0) < len(a1)) and (a1[-1] == '-') :
+                aligned[1] = a1[:-1] + (last * (len(a1) - len(a0)))
+
+            elif (len(a1) < len(a0)) and (a0[-1] == '-') :
+                aligned[0] = a0[:-1] + (last * (len(a0) - len(a1)))
+
+
         last_match = '-'
         last_gap = True 
         diff = 0
