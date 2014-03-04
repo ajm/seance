@@ -1,8 +1,8 @@
 parser Newick :
     ignore: " \n\t"
     
-    token ID: '[-_\.a-zA-Z0-9]+'
-    token NUM: '\-?[0-9]+\.[0-9]+(e\-?[0-9]+)?'
+    token ID: '[-_\'\.a-zA-Z0-9]+'
+    token NUM: '\-?[0-9]+\.[0-9]+([eE]\-?[0-9]+)?'
 
     rule newick: tree ";"   {{ return tree }}
     rule tree: ID ":" NUM   {{ return (ID, float(NUM)) }} 

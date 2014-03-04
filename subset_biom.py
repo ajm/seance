@@ -1,6 +1,43 @@
 import sys
 import json
 
+samples = ["CATI2",
+        "ELE2",
+        "VUL2",
+        "SPI2",
+        "NATI2",
+        "EQU2",
+        "X241",
+        "X147",
+        "X308",
+        "X341",
+        "X251",
+        "X266",
+        "X276",
+        "X231",
+        "X110",
+        "X294",
+        "X119",
+        "X186",
+        "N301",
+        "N302",
+        "N303",
+        "M305",
+        "M306",
+        "X147+X308_1:1",
+        "X241+X251_4:1",
+        "X294+X231_10:1",
+        "X251+X276+X119_1:1:1",
+        "X231+X186+X266_10:2:1",
+        "X147+X308_1:1_2",
+        "X241+X251_4:1_2",
+        "X294+X231_10:1_2",
+        "X251+X276+X119_1:1:1_2",
+        "X231+X186+X266_10:2:1_2"]
+
+def include_sample(name) :
+    return name.split()[0] in samples
+
 def main() :
     f = open(sys.argv[1])
     biom = json.loads(f.read())
@@ -18,7 +55,8 @@ def main() :
     row_conversion = {}
 
     for index,row in enumerate(biom['rows']) :
-        if "Strongyloides" in row['id'] :
+        #if "Strongyloides" in row['id'] :
+        if 1 :
             row_conversion[index] = len(tmp['rows'])
             tmp['rows'].append(row)
 
@@ -27,8 +65,9 @@ def main() :
 
     for index,column in enumerate(biom['columns']) :
         metadata = column['metadata']
-        if (metadata['Location'] in ('Campsite', 'Talatakely')) and \
-           (metadata['Lemur'] not in ('Dog', 'Rattus')) :
+        #if (metadata['Location'] in ('Campsite', 'Talatakely')) and \
+        #   (metadata['Lemur'] not in ('Dog', 'Rattus')) :
+        if include_sample(column['id']) :
             column_conversion[index] = len(tmp['columns'])
             tmp['columns'].append(column)
 

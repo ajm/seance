@@ -270,8 +270,9 @@ class WorkFlow(object) :
                 print >> f, self.seqdb.get(key).fasta()
         else :
             for key in keys :
-                print >> f, ">%s" % names.get(key, "%s_unknown" % key)
-                print >> f, self.seqdb.get(key).sequence
+                s = self.seqdb.get(key)
+                print >> f, ">%s" % (names.get(key, "%s_unknown" % key))
+                print >> f, s.sequence
 
         f.close()
         self.log.info("written %s" % filename)

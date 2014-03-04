@@ -11,7 +11,7 @@ import collections
 
 from os.path import abspath, join, dirname
 from seance.filetypes import SffFile, FastqFile
-from seance.datatypes import IUPAC, Sequence
+from seance.datatypes import IUPAC
 
 class ExternalProgramError(Exception) :
     pass
@@ -328,15 +328,25 @@ class BlastN(ExternalProgram) :
 
     def __get_complete_desc(self, name) :
         try :
-            f = urllib2.urlopen(self.url % name)
+            f = urllib2.urlopen(self.url % name, None, 1)
             #return '_'.join(f.readline().split('|')[-1].strip().split()[:2]).replace('.', '') # ;-P
-            tmp = '_'.join(f.readline().split('|')[-1].strip().split()[:2])
+            line = f.readline()
+            tmp = '_'.join(line.split('|')[-1].strip().split()[:2])
             for badchar in " \n\t:,)(;][" : # these cause problems for RaxML
                 tmp = tmp.replace(badchar, '')
+
+            if tmp == '' :
+                self.log.warn("querying ncbi eutils for %s failed (empty file), retrying..." % (name))
+                return self.__get_complete_desc(name)
+
             return tmp
         
         except urllib2.HTTPError, he :
             self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
+            return self.__get_complete_desc(name)
+
+        except urllib2.URLError, ue :
+            self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(ue)))
             return self.__get_complete_desc(name)
 
     def get_names(self, fasta_fname) :

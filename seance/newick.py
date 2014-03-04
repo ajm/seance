@@ -10,8 +10,8 @@ class NewickScanner(runtime.Scanner):
         ('":"', re.compile(':')),
         ('";"', re.compile(';')),
         (' \n\t', re.compile(' \n\t')),
-        ('ID', re.compile('[-_\\.a-zA-Z0-9]+')),
-        ('NUM', re.compile('\\-?[0-9]+\\.[0-9]+(e\\-?[0-9]+)?')),
+        ('ID', re.compile("[-_'\\.a-zA-Z0-9]+")),
+        ('NUM', re.compile('\\-?[0-9]+\\.[0-9]+([eE]\\-?[0-9]+)?')),
     ]
     def __init__(self, str,*args,**kw):
         runtime.Scanner.__init__(self,None,{' \n\t':None,},str,*args,**kw)

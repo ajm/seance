@@ -174,7 +174,7 @@ Legal commands are %s (see below for options).
         -x NUM      --maxhomopolymer=NUM    (default = %s)
         -n          --keepambiguous         (default = %s)
 
-                    --qualitymethod=X       (default = %s, options = (none, min, average, window))
+                    --qualmethod=X          (default = %s, options = (none, min, average, window))
         -q NUM      --quality=NUM           (default = %s)
         -w NUM      --windowlength=NUM      (default = %s)
 
@@ -307,7 +307,7 @@ def parse_args(command, args) :
                             "miderrors=", 
                             "midlength=", 
                             "length=",
-                            "qualitymethod=",
+                            "qualmethod=",
                             "quality=",
                             "windowlength=",
                             "maxhomopolymer=",
@@ -375,7 +375,7 @@ def parse_args(command, args) :
         elif o in ('-l', '--length') :
             options['length'] = expect_int("length", a)
         
-        elif o in ('--qualitymethod') :
+        elif o in ('--qualmethod',) :
             methods = ['none', 'min', 'average', 'window']
             if a in methods :
                 options['quality-method'] = a
@@ -412,40 +412,40 @@ def parse_args(command, args) :
             options['silva-fasta'] = a + '.fasta'
             options['silva-tree'] = a + '.tree'
 
-        elif o in ('--blastcentroids') :
+        elif o in ('--blastcentroids',) :
             options['blast-centroids'] = True
 
-        elif o in ('--mergeblasthits') :
+        elif o in ('--mergeblasthits',) :
             options['merge-blast-hits'] = True
 
-        elif o in ('--chimeras') :
+        elif o in ('--chimeras',) :
             options['chimeras'] = True
 
-        elif o in ('--nohomopolymer') :
+        elif o in ('--nohomopolymer',) :
             options['no-homopolymer-correction'] = True
 
-        elif o in ('--clusters') :
+        elif o in ('--clusters',) :
             options['cluster-fasta'] = a
 
-        elif o in ('--biom') :
+        elif o in ('--biom',) :
             options['cluster-biom'] = a
 
-        elif o in ('--tree') :
+        elif o in ('--tree',) :
             options['phylogeny-tree'] = a
 
-        elif o in ('--output') :
+        elif o in ('--output',) :
             options['output-prefix'] = a
 
-        elif o in ('--xml') :
+        elif o in ('--xml',) :
             options['phylogeny-xml'] = a
 
-        elif o in ('--url') :
+        elif o in ('--url',) :
             options['wasabi-url'] = a
 
-        elif o in ('--user') :
+        elif o in ('--user',) :
             options['wasabi-user'] = a
 
-        elif o in ('--notree') :
+        elif o in ('--notree',) :
             options['heatmap-no-tree'] = True
 
         else :
