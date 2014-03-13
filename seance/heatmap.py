@@ -261,6 +261,17 @@ def draw_sample_labels(context, samples, x_start, y_start, block_size) :
         context.fill()
         context.identity_matrix()
 
+def to_newick(tree) :
+    subtree,distance = tree
+
+    if isinstance(subtree, str) :
+        return "%s:%f" % (subtree, distance)
+
+    left  = to_newick(subtree[0])
+    right = to_newick(subtree[1])
+
+    return "(%s,%s):%f" % (left, right, distance)
+
 def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False) :
     global x_scalar, y_scalar, margin, tree_extent
 
@@ -268,6 +279,8 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False) :
     biom_data = parse_biom(biomfile)
 
     data = preprocess_data(newick_data, biom_data)
+
+    #print to_newick(data['tree'])
 
     # setup cairo with dummy dimensions
     surface = cairo.PDFSurface(output, 0, 0)
@@ -278,7 +291,7 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False) :
 
     # calculate new variables
     block_len = 10
-    tree_blocks = 30
+    tree_blocks = 20
     spacer = 3
     margin = 10
 
@@ -297,13 +310,16 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False) :
     else :
         num_species, phylogenetic_height = dfs_dimensions(data['tree'], 0)
     
-        tree_width = tree_blocks * block_len
+        tree_width = tree_blocks * block_len # XXX
+        #_tmp = 500
+        #tree_width = phylogenetic_height * _tmp
         tree_extent = margin + tree_width
 
         heatmap_width = len(data['samples']) * block_len
         heatmap_height = num_species * block_len
 
-        x_scalar = tree_width / float(phylogenetic_height)
+        x_scalar = tree_width / float(phylogenetic_height) # XXX
+        #x_scalar = _tmp
         y_scalar = heatmap_height / float(num_species)
 
         heatmap_left_edge = margin + tree_width + spacer

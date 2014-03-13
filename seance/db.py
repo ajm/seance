@@ -68,6 +68,7 @@ class SequenceDict(object) :
             self.db[key].merge(seq)
         else :
             key = self.generate_key(tkey)
+            seq.id = str(key) # overwrite the original name
             self.db[key] = seq
 
         self.count += 1

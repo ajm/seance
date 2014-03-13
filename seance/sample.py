@@ -66,16 +66,18 @@ class Sample(object) :
         self.fastq.open()
 
         for seq in self.fastq :
-            count = seq.duplicates
-            key = seq.id
+#            count = seq.duplicates
+#            key = seq.id
 
-            if key not in self.db :
-                self.db.put(seq)
-            else :
-                self.db.get(key).duplicates += count
+            self.seqcounts[self.db.put(seq)] += seq.duplicates
 
-            # each sequences only appears once per sample on reload
-            self.seqcounts[key] = count
+#            if key not in self.db :
+#                self.db.put(seq)
+#            else :
+#                self.db.get(key).duplicates += count
+#
+#            # each sequences only appears once per sample on reload
+#            self.seqcounts[key] = count
 
         self.fastq.close()
 

@@ -156,7 +156,7 @@ class Pagan(ExternalProgram) :
         return FastqFile(out_fname + ".fas")
 
     def phylogenetic_alignment(self, fasta_fname) :
-        command = "pagan --seqfile %s --outfile %s --raxml-tree --homopolymer" # &> /dev/null"
+        command = "pagan --seqfile %s --outfile %s --raxml-tree --homopolymer --xml" # &> /dev/null"
         out_fname = fasta_fname + ".out"
 
         try :
@@ -166,7 +166,7 @@ class Pagan(ExternalProgram) :
             self.log.error(str(epe))
             sys.exit(1)
 
-        return out_fname + ".fas", out_fname + ".tre"
+        return out_fname + ".fas", out_fname + ".tre", out_fname + ".xml"
 
     def phylogenetic_placement(self, ref_alignment, ref_tree, queries) :
         command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s --fast-placement \
@@ -360,9 +360,15 @@ class BlastN(ExternalProgram) :
 
         for line in o.split('\n') :
             fields = line.split(',')
-            
+            try :
+                name = int(fields[0])
+
+            except ValueError, ve :
+                self.log.warn("blast returned an id I do not understand (%s), skipping..." % (fields[0]))
+                continue
+
             # only accept the first one
-            if fields[0] in names :
+            if name in names :
                 continue
             
             try :
@@ -373,13 +379,7 @@ class BlastN(ExternalProgram) :
                 continue
 
             if re.match(".+\.\d+", desc[3]) :
-                key = fields[0]
-                #try :
-                #    key = int(fields[0])
-                #except ValueError, ve :
-                #    continue
-
-                names[key] = "%s_%s_%s" % (fields[0], self.__get_complete_desc(desc[3]), fields[2])
+                names[name] = "%s_%s_%s" % (fields[0], self.__get_complete_desc(desc[3]), fields[2])
 
         return names
 

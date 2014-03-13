@@ -208,7 +208,7 @@ class WorkFlow(object) :
 
     def cluster(self) :
         # rebuild the database from preprocessed samples in outdir
-        self.seqdb = SequenceDB(preprocessed=True)
+        self.seqdb = SequenceDB(preprocessed=False) # setting this to true causes things to be overwritten if we merge mulitiple preprocessing steps
         samples = self.__preprocessed_samples()
         
         if self.seqdb.num_sequences() == 0 :
@@ -264,14 +264,14 @@ class WorkFlow(object) :
 
     def __fasta(self, filename, keys, names=None) :
         f = open(filename, 'w')
-
+        
         if names is None :
             for key in keys :
                 print >> f, self.seqdb.get(key).fasta()
         else :
             for key in keys :
                 s = self.seqdb.get(key)
-                print >> f, ">%s" % (names.get(key, "%s_unknown" % key))
+                print >> f, ">%s" % (names.get(key, "%d_unknown" % key))
                 print >> f, s.sequence
 
         f.close()
@@ -285,7 +285,7 @@ class WorkFlow(object) :
 
         output_clusters = clustering.clusters
         output_samples = [ s for s in samples if s.contains(all_keys) ]
-        output_otus = [ cluster_names.get(k, "%s_unknown" % k) for k in centroids ]
+        output_otus = [ cluster_names.get(k, "%d_unknown" % k) for k in centroids ]
 
         self.log.info("%d / %d samples have at least one sequence used in clustering" % \
                 (len(output_samples), len(samples)))
@@ -313,8 +313,7 @@ class WorkFlow(object) :
 
         if not self.options['silva-fasta'] :
             self.log.info("aligning %s sequences with PAGAN ..." % (num_sequences))
-            alignment,tree = p.phylogenetic_alignment(self.options['cluster-fasta'])
-            xmlfile = None
+            alignment,tree,xmlfile = p.phylogenetic_alignment(self.options['cluster-fasta'])
         else :
             self.log.info("aligning %s sequences with PAGAN against SILVA ..." % (num_sequences))
             alignment,tree,xmlfile = p.silva_phylogenetic_alignment(self.options['silva-fasta'], 
@@ -323,9 +322,7 @@ class WorkFlow(object) :
 
         os.rename(alignment, self.options['phylogeny-fasta'])
         os.rename(tree,      self.options['phylogeny-tree'])
-        
-        if xmlfile :
-            os.rename(xmlfile,   self.options['phylogeny-xml'])
+        os.rename(xmlfile,   self.options['phylogeny-xml'])
 
         self.log.info("created %s" % self.options['phylogeny-fasta'])
         self.log.info("created %s" % self.options['phylogeny-tree'])

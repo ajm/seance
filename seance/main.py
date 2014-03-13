@@ -246,7 +246,6 @@ Legal commands are %s (see below for options).
                     --user=USER
                     --url=URL               (default = %s)\n""" % \
                (options['phylogeny-xml'],
-                options['wasabi-user'],
                 options['wasabi-url'])
 
 def setup_logging(verbose) :
