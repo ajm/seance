@@ -15,7 +15,7 @@ def dendropy2internal(tnode) :
 
     children = tnode.child_nodes()
 
-    return [ [ dendropy2internal(children[0]), dendropy2internal(children[1]) ], tnode.edge_length ]
+    return [ [ dendropy2internal(children[0]), dendropy2internal(children[1]) ], 0.0 if tnode.edge_length is None else tnode.edge_length ]
 
 def parse_newick(newick_file) :
     #with open(newick_file) as f :
@@ -34,7 +34,7 @@ def parse_newick(newick_file) :
     
     return dendropy2internal(tree.seed_node)
 
-def parse_biom(biom_file, include=None) :
+def parse_biom(biom_file) :
     with open(biom_file) as f :
         s = f.read()
 
@@ -64,6 +64,10 @@ def preprocess_data(tree_data, biom_data) :
         # zero count species need to be pruned from the tree data
         #
         new_tree = prune_tree(tree_data, new_species)
+        
+        # reset the length of the root (just in case we are only drawing a subset)
+        if len(new_tree) == 2 :
+            new_tree[1] = 0.02
 
         #
         # resort non-zero species list into order from tree
@@ -139,14 +143,10 @@ def species_name_transform(species) :
 def prune_tree(tree, species_names) :
     subtree,distance = tree
 
-    #print subtree
-    #print distance
-    #print ""
-
     if isinstance(subtree, str) :
         if subtree in species_names :
             #print >> stderr, "prune_tree: found %s" % subtree
-            return subtree,distance
+            return [subtree,distance]
 
         #print >> stderr, "prune_tree: did not find %s" % subtree
         return None,None
@@ -156,12 +156,12 @@ def prune_tree(tree, species_names) :
 
     if subtree0 :
         if subtree1 :
-            return [(subtree1, distance1), (subtree0, distance0)], distance
+            return [[[subtree1, distance1], [subtree0, distance0]], distance]
         else :
-            return subtree0,distance+distance0
+            return [subtree0,distance+distance0]
     else :
         if subtree1 :
-            return subtree1,distance+distance1
+            return [subtree1,distance+distance1]
         else :
             return None,None
 
@@ -291,20 +291,50 @@ def to_newick(tree) :
 
     return "(%s,%s):%f" % (left, right, distance)
 
+def biom_subset(biom_data, include) :
+    samples = biom_data['columns']
+
+    try :
+        pat = re.compile(include)
+    except :
+        print >> stderr, "ERROR bad regex ('%s')\n" % include 
+        exit(1)
+
+    keep = []
+
+    for index,sample in enumerate(samples) :
+        if pat.match(sample['id']) is not None :
+            keep.append(index)
+
+    if len(keep) == 0 :
+        print >> stderr, "ERROR subset regex '%s' matched zero samples!\n" % include
+        exit(1)
+
+    new_data = []
+
+    for x,y,c in biom_data['data'] :
+        if int(y) in keep :
+            new_data.append((x,y,c))
+
+    return new_data
+
 def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
-    biom_data = parse_biom(biomfile, include)
+    biom_data = parse_biom(biomfile)
+
+    if include :
+        biom_data['data'] = biom_subset(biom_data, include)
 
     data = preprocess_data(newick_data, biom_data)
 
-    #print to_newick(data['tree'])
+    print to_newick(data['tree'])
 
     # setup cairo with dummy dimensions
     surface = cairo.PDFSurface(output, 0, 0)
     context = cairo.Context(surface)
-    
+
     context.select_font_face("monospace")
     context.set_font_size(8)
 
