@@ -1,7 +1,7 @@
 from sys import exit, stderr, argv
 from math import log10, pi
-
-from newick import parse as newick
+import re
+#from newick import parse as newick
 import json
 
 import cairo
@@ -9,13 +9,32 @@ import cairo
 # height, width, font size, tree width
 # or just box width and everything derives from that
 
-def parse_newick(newick_file) :
-    with open(newick_file) as f :
-        s = f.read()
-    
-    return newick('newick', s)
+def dendropy2internal(tnode) :
+    if tnode.is_leaf() :
+        return [ tnode.get_node_str(), tnode.edge_length ]
 
-def parse_biom(biom_file) :
+    children = tnode.child_nodes()
+
+    return [ [ dendropy2internal(children[0]), dendropy2internal(children[1]) ], tnode.edge_length ]
+
+def parse_newick(newick_file) :
+    #with open(newick_file) as f :
+    #    s = f.read()
+    # 
+    #return newick('newick', s)
+
+    try :
+        import dendropy
+
+    except ImportError :
+        print >> stderr, "ERROR: dendropy needs to be installed to use trees, or use --notree option\n"
+        exit(1)
+
+    tree = dendropy.Tree.get_from_path(newick_file, schema='newick', as_rooted=True)
+    
+    return dendropy2internal(tree.seed_node)
+
+def parse_biom(biom_file, include=None) :
     with open(biom_file) as f :
         s = f.read()
 
@@ -276,7 +295,7 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
-    biom_data = parse_biom(biomfile)
+    biom_data = parse_biom(biomfile, include)
 
     data = preprocess_data(newick_data, biom_data)
 
