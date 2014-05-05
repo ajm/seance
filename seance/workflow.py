@@ -385,7 +385,8 @@ class WorkFlow(object) :
         phylogenetic_heatmap(self.options['cluster-biom'], 
                              tree=self.options['phylogeny-tree'], 
                              output=self.options['heatmap-pdf'],
-                             include=self.options['heatmap-regex'])
+                             include=self.options['heatmap-regex'],
+                             output_tree=self.options['heatmap-out-tree'])
         
         print "wrote %s" % self.options['heatmap-pdf']
         return 0

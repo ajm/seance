@@ -318,7 +318,7 @@ def biom_subset(biom_data, include) :
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
@@ -329,7 +329,9 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
 
     data = preprocess_data(newick_data, biom_data)
 
-    print to_newick(data['tree'])
+    if output_tree is not None :
+        with open(output_tree, 'w') as f :
+            print >> f, to_newick(data['tree'])
 
     # setup cairo with dummy dimensions
     surface = cairo.PDFSurface(output, 0, 0)
