@@ -45,7 +45,7 @@ def get_default_options(fillin=False) :
             'merge-blast-hits'              : False,
             'no-homopolymer-correction'     : False,
 
-            'output-prefix'     : default_prefix,
+            'prefix'            : default_prefix,
             'cluster-fasta'     : None,
             'cluster-biom'      : None,
             'phylogeny-fasta'   : None,
@@ -56,6 +56,8 @@ def get_default_options(fillin=False) :
             'silva-tree'        : None,
 
             'heatmap-no-tree'   : False,
+            'heatmap-pdf'       : 'seance.pdf',
+            'heatmap-regex'     : None,
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
             'wasabi-user'       : None,
 
@@ -63,12 +65,12 @@ def get_default_options(fillin=False) :
            }
 
     if fillin :
-        apply_output_prefix(tmp)
+        apply_prefix(tmp)
 
     return tmp
 
-def apply_output_prefix(d, command='all') :
-    tmp = d['output-prefix']
+def apply_prefix(d, command='all') :
+    tmp = d['prefix']
     tmp = join(d['outdir'], tmp)
 
     if not d['cluster-fasta'] :
@@ -157,29 +159,30 @@ Legal commands are %s (see below for options).
                 list_sentence(bold_all(get_all_programs())))
     
     print >> stderr, """    Common options:
-        -o DIR      --outdir=DIR            (default = %s)
-        -v          --verbose\n""" % \
-                (str(options['outdir']))
+        -o DIR          --outdir=DIR            (default = %s)
+        -p FILEPREFIX   --prefix=FILEPREFIX     (default = %s, overrided by biom,tree,clusters,xml)
+        -v              --verbose\n""" % \
+                (options['outdir'], options['prefix'])
 
     if command in ('preprocess','all') :
         print >> stderr, """    Preprocess options:
-        -p SEQ      --forwardprimer=SEQ     (default = %s)
-        -r SEQ      --reverseprimer=SEQ     (default = %s)
-        -k          --clipprimers           (default = %s)
+        -f SEQ          --forwardprimer=SEQ     (default = %s)
+        -r SEQ          --reverseprimer=SEQ     (default = %s)
+        -k              --clipprimers           (default = %s)
 
-        -e NUM      --miderrors=NUM         (default = %s)
-        -g NUM      --midlength=NUM         (default = %s)
+        -e NUM          --miderrors=NUM         (default = %s)
+        -g NUM          --midlength=NUM         (default = %s)
 
-        -l NUM      --length=NUM            (default = %s)
-        -x NUM      --maxhomopolymer=NUM    (default = %s)
-        -n          --keepambiguous         (default = %s)
+        -l NUM          --length=NUM            (default = %s)
+        -x NUM          --maxhomopolymer=NUM    (default = %s)
+        -n              --keepambiguous         (default = %s)
 
-                    --qualmethod=X          (default = %s, options = (none, min, average, window))
-        -q NUM      --quality=NUM           (default = %s)
-        -w NUM      --windowlength=NUM      (default = %s)
+                        --qualmethod=X          (default = %s, options = (none, min, average, window))
+        -q NUM          --quality=NUM           (default = %s)
+        -w NUM          --windowlength=NUM      (default = %s)
 
-        -d          --denoise               (default = %s)
-                    --chimeras              (default = %s)\n""" % \
+        -d              --denoise               (default = %s)
+                        --chimeras              (default = %s)\n""" % \
                (str(options['forwardprimer']),
                 str(options['reverseprimer']),
                 str(options['clipprimers']),
@@ -196,19 +199,17 @@ Legal commands are %s (see below for options).
 
     if command in ('cluster','all') :
         print >> stderr, """    Cluster options:
-        -m FILE     --metadata=FILE         (default = %s)
+        -m FILE         --metadata=FILE         (default = %s)
 
-        -a NUM      --totalduplicates=NUM   (default = %s)
-        -b NUM      --samples=NUM           (default = %s)
-        -c NUM      --duplicates=NUM        (default = %s)
+        -a NUM          --totalduplicates=NUM   (default = %s)
+        -b NUM          --samples=NUM           (default = %s)
+        -c NUM          --duplicates=NUM        (default = %s)
         
-        -t REAL     --similarity=REAL       (default = %s)
+        -t REAL         --similarity=REAL       (default = %s)
         
-                    --blastcentroids        (default = %s)
-                    --mergeblasthits        (default = %s)
-                    --nohomopolymer         (default = %s)
-                    --output=FILEPREFIX     (default = %s{.cluster.fasta, 
-                                                          .cluster.biom})\n""" % \
+                        --blastcentroids        (default = %s)
+                        --mergeblasthits        (default = %s)
+                        --nohomopolymer         (default = %s)\n""" % \
                (options['metadata'],
                 str(options['total-duplicate-threshold']),
                 str(options['sample-threshold']), 
@@ -216,35 +217,31 @@ Legal commands are %s (see below for options).
                 str(options['otu-similarity']),
                 str(options['blast-centroids']),
                 str(options['merge-blast-hits']),
-                str(options['no-homopolymer-correction']),
-                options['output-prefix'])
+                str(options['no-homopolymer-correction']))
 
     if command in ('phylogeny','all') :
         print >> stderr, """    Phylogeny options:
-                    --clusters=FILE         (default = %s)
-        -s FILE     --silva=FILEPREFIX      (default = %s, expects FILEPREFIX{.fasta, .tree})
-                    --output=FILEPREFIX     (default = %s{.phylogeny.fasta, 
-                                                          .phylogeny.tree, 
-                                                          .phylogeny.xml})\n""" % \
-               (options['cluster-fasta'],
-                options['silva-fasta'],
-                options['output-prefix'])
+                        --refalignment=FILE  (expects fasta)
+                        --reftree=FILE       (expects newick)
+                        --clusters=FILE         (default = %s)\n""" % \
+               (options['cluster-fasta'])
 
     if command in ('heatmap','all') :
         print >> stderr, """    Heatmap options:
-                    --biom=FILE             (default = %s)
-                    --tree=FILE             (default = %s)
-                    --notree
-                    --output=FILE           (default = %s.pdf)\n""" % \
+                        --biom=FILE             (default = %s)
+                        --tree=FILE             (default = %s)
+                        --notree
+                        --subset=REGEX
+                        --output=FILE           (default = %s.pdf)\n""" % \
                (options['cluster-biom'],
                 options['phylogeny-tree'],
-                options['output-prefix'])
+                options['heatmap-pdf'])
 
     if command in ('wasabi','all') :
         print >> stderr, """    Wasabi options:
-                    --xml=FILE              (default = %s)
-                    --user=USER
-                    --url=URL               (default = %s)\n""" % \
+                        --xml=FILE              (default = %s)
+                        --user=USER
+                        --url=URL               (default = %s)\n""" % \
                (options['phylogeny-xml'],
                 options['wasabi-url'])
 
@@ -297,8 +294,9 @@ def parse_args(command, args) :
     try :
         opts,args = getopt.getopt(
                         args,
-                        "o:dp:r:ke:g:l:q:w:x:nm:a:b:c:t:s:vh",
-                        [   "outdir=", 
+                        "o:dp:f:r:ke:g:l:q:w:x:nm:a:b:c:t:vh",
+                        [   "outdir=",
+                            "prefix=",
                             "denoise", 
                             "forwardprimer=", 
                             "reverseprimer=", 
@@ -316,7 +314,9 @@ def parse_args(command, args) :
                             "samples=",
                             "duplicates=",
                             "similarity=",
-                            "silva=",
+                            "refalignment=",
+                            "reftree=",
+                            "output=",
                             "verbose",
                             "help",
                             "blastcentroids",
@@ -330,7 +330,8 @@ def parse_args(command, args) :
                             "clusters=",
                             "xml=",
                             "url=",
-                            "user="
+                            "user=",
+                            "subset="
                         ]
                     )
 
@@ -356,7 +357,7 @@ def parse_args(command, args) :
         elif o in ('-d', '--denoise') :
             options['denoise'] = True
 
-        elif o in ('-p', '--forwardprimer') :
+        elif o in ('-f', '--forwardprimer') :
             options['forwardprimer'] = expect_iupac("forwardprimer", a)
 
         elif o in ('-r', '--reverseprimer') :
@@ -407,9 +408,11 @@ def parse_args(command, args) :
         elif o in ('-t', '--similarity') :
             options['otu-similarity'] = expect_float("similarity", a)
 
-        elif o in ('-s', '--silva') :
-            options['silva-fasta'] = a + '.fasta'
-            options['silva-tree'] = a + '.tree'
+        elif o in ('--refalignment',) :
+            options['silva-fasta'] = a
+
+        elif o in ('--reftree',) :
+            options['silva-tree'] = a
 
         elif o in ('--blastcentroids',) :
             options['blast-centroids'] = True
@@ -432,8 +435,11 @@ def parse_args(command, args) :
         elif o in ('--tree',) :
             options['phylogeny-tree'] = a
 
+        elif o in ('-p', '--prefix',) :
+            options['prefix'] = a
+
         elif o in ('--output',) :
-            options['output-prefix'] = a
+            options['heatmap-pdf'] = a
 
         elif o in ('--xml',) :
             options['phylogeny-xml'] = a
@@ -447,6 +453,9 @@ def parse_args(command, args) :
         elif o in ('--notree',) :
             options['heatmap-no-tree'] = True
 
+        elif o in ('--subset',) :
+            options['heatmap-regex'] = a
+
         else :
             assert False, "unhandled option %s" % o
 
@@ -458,7 +467,10 @@ def parse_args(command, args) :
 def check_options(command, options) :
     system = System()
 
-    apply_output_prefix(options, command)
+    apply_prefix(options, command)
+
+#    for i in options :
+#        print i, options[i]
 
     if not system.check_directory(options['outdir'], create=True) :
         exit(1)

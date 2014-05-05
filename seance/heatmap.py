@@ -272,7 +272,7 @@ def to_newick(tree) :
 
     return "(%s,%s):%f" % (left, right, distance)
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
@@ -309,7 +309,8 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False) :
 
     else :
         num_species, phylogenetic_height = dfs_dimensions(data['tree'], 0)
-    
+        print "tree height = %f" % phylogenetic_height
+
         tree_width = tree_blocks * block_len # XXX
         #_tmp = 500
         #tree_width = phylogenetic_height * _tmp

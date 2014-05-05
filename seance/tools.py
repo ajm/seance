@@ -156,7 +156,7 @@ class Pagan(ExternalProgram) :
         return FastqFile(out_fname + ".fas")
 
     def phylogenetic_alignment(self, fasta_fname) :
-        command = "pagan --seqfile %s --outfile %s --raxml-tree --homopolymer --xml" # &> /dev/null"
+        command = "pagan --seqfile %s --outfile %s --raxml-tree --xml" # &> /dev/null"
         out_fname = fasta_fname + ".out"
 
         try :
@@ -188,10 +188,21 @@ class Pagan(ExternalProgram) :
         #command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s " + \
         #   "--fast-placement --use-anchors --prune-extended-alignment --test-every-terminal-node " + \
         #   "--xml --trim-extended-alignment --score-only-ungapped"
-        command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s " + \
-            "--use-anchors --use-exonerate-local --test-every-terminal-node --query-distance 0.01 " + \
-            "--one-placement-only --output-nhx-tree --xml --prune-extended-alignment --trim-extended-alignment " + \
-            "--prune-keep-number 0"
+        #command = "pagan --ref-seqfile %s --ref-treefile %s --queryfile %s --outfile %s " + \
+        #    "--use-anchors --use-exonerate-local --test-every-terminal-node --query-distance 0.01 " + \
+        #    "--one-placement-only --output-nhx-tree --xml --prune-extended-alignment --trim-extended-alignment " + \
+        #    "--prune-keep-number 0"
+        command = "pagan --ref-seqfile %s \
+                         --ref-treefile %s \
+                         --queryfile %s \
+                         --outfile %s \
+                         --terminal-nodes \
+                         --one-placement-only \
+                         --output-nhx-tree \
+                         --xml \
+                         --trim-extended-alignment \
+                         --prune-keep-number 0 \
+                         --prune-extended-alignment"
 
         #out_fname = os.path.splitext(queries)[0] + ".silva"
         out_fname = queries + ".silva"

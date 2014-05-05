@@ -206,5 +206,30 @@ class Cluster(object) :
 
         p.end()
 
+        #self.log.info("number of clusters = %d" % len(self.clusters))
+
+    def create_clusters2(self, keys=None, homopolymer_correction=True, singletons=[], sample_threshold=1) :
+        self.create_clusters(keys=keys.keys(), homopolymer_correction=homopolymer_correction)
+
+        new_clusters = []
+
+        for c in self.clusters :
+            tmp = set()
+            add_cluster = False
+
+            for k in c :
+                # short circuit in case we have any control samples
+                if k in singletons :
+                    add_cluster = True
+                    break
+
+                tmp.update(keys[k])
+
+            if add_cluster or (len(tmp) >= sample_threshold) :
+                new_clusters.append(c)
+
+        print "removed %d clusters due to sample_threshold" % (len(self.clusters) - len(new_clusters))
+
+        self.clusters = new_clusters
         self.log.info("number of clusters = %d" % len(self.clusters))
 

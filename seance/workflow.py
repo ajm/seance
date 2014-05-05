@@ -206,6 +206,26 @@ class WorkFlow(object) :
 
         return list(cluster_input_keys)
 
+    def __get_cluster_input2(self, samples, duplicate_threshold, contamination_threshold) :
+        seq2samp = collections.defaultdict(list)
+        singletons = []
+
+        for sample in samples :
+            sample.remove_less_than(contamination_threshold)
+
+        # first collect keys for all sequences that fit number of reads
+        for index, sample in enumerate(samples) :
+            is_singleton = sample.metadata['allow-singletons']
+
+            for key,freq in sample.seqcounts.most_common() :
+                if is_singleton or (self.seqdb.get(key).duplicates >= duplicate_threshold) :
+                    seq2samp[key].append(index)
+
+                if is_singleton :
+                    singletons.append(key)
+
+        return seq2samp, singletons
+
     def cluster(self) :
         # rebuild the database from preprocessed samples in outdir
         self.seqdb = SequenceDB(preprocessed=False) # setting this to true causes things to be overwritten if we merge mulitiple preprocessing steps
@@ -220,13 +240,18 @@ class WorkFlow(object) :
         #    sample.print_sample(extension=".rebuild")
         
         # get keys of sequences we want to cluster
-        input_keys = self.__get_cluster_input(samples,
-                                self.options['total-duplicate-threshold'],
-                                self.options['sample-threshold'],
-                                self.options['duplicate-threshold'])
+#        input_keys = self.__get_cluster_input(samples,
+#                                self.options['total-duplicate-threshold'],
+#                                self.options['sample-threshold'],
+#                                self.options['duplicate-threshold'])
+
+        input_keys, singleton_keys = self.__get_cluster_input2(samples,
+                                    self.options['total-duplicate-threshold'],
+                                    self.options['duplicate-threshold'])
 
         # get some info
-        num_reads = sum([ self.seqdb.get(i).duplicates for i in input_keys ])
+#        num_reads = sum([ self.seqdb.get(i).duplicates for i in input_keys ])
+        num_reads = sum([ self.seqdb.get(i).duplicates for i in input_keys.keys() ])
         print "clustering %d/%d (%.2f%%) sequences (%d/%d (%.2f%%) reads)" % \
                         (len(input_keys), self.seqdb.num_sequences(), \
                         len(input_keys) * 100 / float(self.seqdb.num_sequences()), \
@@ -235,7 +260,11 @@ class WorkFlow(object) :
 
         # clustering
         c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['verbose'])
-        c.create_clusters(keys=input_keys, homopolymer_correction=not self.options['no-homopolymer-correction'])
+#        c.create_clusters(keys=input_keys, homopolymer_correction=not self.options['no-homopolymer-correction'])
+        c.create_clusters2(keys=input_keys, 
+                           homopolymer_correction=not self.options['no-homopolymer-correction'], 
+                           singletons=singleton_keys,
+                           sample_threshold=self.options['sample-threshold'])
 
         print "created %d clusters" % len(c)
 
@@ -355,9 +384,10 @@ class WorkFlow(object) :
 
         phylogenetic_heatmap(self.options['cluster-biom'], 
                              tree=self.options['phylogeny-tree'], 
-                             output=self.options['output-prefix'] + '.pdf')
+                             output=self.options['heatmap-pdf'],
+                             include=self.options['heatmap-regex'])
         
-        print "wrote %s.pdf" % self.options['output-prefix']
+        print "wrote %s" % self.options['heatmap-pdf']
         return 0
 
     def wasabi(self) :
