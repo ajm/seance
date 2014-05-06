@@ -61,6 +61,8 @@ def get_default_options(fillin=False) :
             'heatmap-out-tree'  : None,
             'heatmap-flip-tree' : False,
             'heatmap-scale'     : 0.05,
+            'heatmap-tree-height' : 20,
+
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
             'wasabi-user'       : None,
 
@@ -238,10 +240,12 @@ Legal commands are %s (see below for options).
                         --outtree=FILE          (output tree used in separate newick file)
                         --fliptree              (flip tree upside down)
                         --scale=FLOAT           (set length of tree scale, default = %.2f)
+                        --height=INT            (set height of tree in heatmap blocks, default = %d)
                         --output=FILE           (default = %s.pdf)\n""" % \
                (options['cluster-biom'],
                 options['phylogeny-tree'],
                 options['heatmap-scale'],
+                options['heatmap-tree-height'],
                 options['heatmap-pdf'])
 
     if command in ('wasabi','all') :
@@ -341,7 +345,8 @@ def parse_args(command, args) :
                             "subset=",
                             "outtree=",
                             "fliptree",
-                            "scale="
+                            "treescale=",
+                            "treeheight="
                         ]
                     )
 
@@ -472,8 +477,11 @@ def parse_args(command, args) :
         elif o in ('--fliptree',) :
             options['heatmap-flip-tree'] = True
 
-        elif o in ('--scale',) :
-            options['heatmap-scale'] = expect_float("scale", a)
+        elif o in ('--treescale',) :
+            options['heatmap-scale'] = expect_float("treescale", a)
+
+        elif o in ('--treeheight',) :
+            options['heatmap-tree-height'] = expect_int("treeheight", a)
 
         else :
             assert False, "unhandled option %s" % o

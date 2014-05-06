@@ -329,7 +329,7 @@ def biom_subset(biom_data, include) :
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
@@ -356,7 +356,7 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
 
     # calculate new variables
     block_len = 10
-    tree_blocks = 20
+    tree_blocks = tree_height_blocks
     spacer = 3
     margin = 10
 
@@ -374,7 +374,7 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
 
     else :
         num_species, phylogenetic_height = dfs_dimensions(data['tree'], 0)
-        print "tree height = %f" % phylogenetic_height
+        #print "tree height = %f" % phylogenetic_height
 
         tree_width = tree_blocks * block_len # XXX
         #_tmp = 500
