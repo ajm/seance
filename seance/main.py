@@ -59,6 +59,7 @@ def get_default_options(fillin=False) :
             'heatmap-pdf'       : 'seance.pdf',
             'heatmap-regex'     : None,
             'heatmap-out-tree'  : None,
+            'heatmap-flip-tree' : False,
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
             'wasabi-user'       : None,
 
@@ -234,6 +235,7 @@ Legal commands are %s (see below for options).
                         --notree
                         --subset=REGEX
                         --outtree=FILE          (output tree used in separate newick file)
+                        --fliptree              (flip tree upside down)
                         --output=FILE           (default = %s.pdf)\n""" % \
                (options['cluster-biom'],
                 options['phylogeny-tree'],
@@ -334,7 +336,8 @@ def parse_args(command, args) :
                             "url=",
                             "user=",
                             "subset=",
-                            "outtree="
+                            "outtree=",
+                            "fliptree"
                         ]
                     )
 
@@ -461,6 +464,9 @@ def parse_args(command, args) :
 
         elif o in ('--subset',) :
             options['heatmap-regex'] = a
+
+        elif o in ('--fliptree',) :
+            options['heatmap-flip-tree'] = True
 
         else :
             assert False, "unhandled option %s" % o

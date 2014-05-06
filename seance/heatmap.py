@@ -140,6 +140,17 @@ def species_name_transform(species) :
 
     return new_species
 
+def flip_tree_horizontal(tree) :
+    subtree,distance = tree
+
+    if isinstance(subtree, str) :
+        return [subtree,distance]
+
+    subtree0,distance0 = flip_tree_horizontal(subtree[0])
+    subtree1,distance1 = flip_tree_horizontal(subtree[1])
+
+    return [[[subtree1,distance1],[subtree0,distance0]], distance]
+
 def prune_tree(tree, species_names) :
     subtree,distance = tree
 
@@ -156,7 +167,7 @@ def prune_tree(tree, species_names) :
 
     if subtree0 :
         if subtree1 :
-            return [[[subtree1, distance1], [subtree0, distance0]], distance]
+            return [[[subtree0, distance0], [subtree1, distance1]], distance]
         else :
             return [subtree0,distance+distance0]
     else :
@@ -318,7 +329,7 @@ def biom_subset(biom_data, include) :
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
@@ -326,6 +337,9 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
 
     if include :
         biom_data['data'] = biom_subset(biom_data, include)
+
+    if flip_tree :
+        newick_data = flip_tree_horizontal(newick_data)
 
     data = preprocess_data(newick_data, biom_data)
 

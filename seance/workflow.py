@@ -68,7 +68,7 @@ class WorkFlow(object) :
                 mf.add(
                         WindowedQualityFilter(
                             self.options['quality'], 
-                            self.options['windowlength'])
+                            elf.options['windowlength'])
                       )
 
         return mf
@@ -386,7 +386,8 @@ class WorkFlow(object) :
                              tree=self.options['phylogeny-tree'], 
                              output=self.options['heatmap-pdf'],
                              include=self.options['heatmap-regex'],
-                             output_tree=self.options['heatmap-out-tree'])
+                             output_tree=self.options['heatmap-out-tree'],
+                             flip_tree=self.options['heatmap-flip-tree'])
         
         print "wrote %s" % self.options['heatmap-pdf']
         return 0
