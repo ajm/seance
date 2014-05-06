@@ -60,6 +60,7 @@ def get_default_options(fillin=False) :
             'heatmap-regex'     : None,
             'heatmap-out-tree'  : None,
             'heatmap-flip-tree' : False,
+            'heatmap-scale'     : 0.05,
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
             'wasabi-user'       : None,
 
@@ -236,9 +237,11 @@ Legal commands are %s (see below for options).
                         --subset=REGEX
                         --outtree=FILE          (output tree used in separate newick file)
                         --fliptree              (flip tree upside down)
+                        --scale=FLOAT           (set length of tree scale, default = %.2f)
                         --output=FILE           (default = %s.pdf)\n""" % \
                (options['cluster-biom'],
                 options['phylogeny-tree'],
+                options['heatmap-scale'],
                 options['heatmap-pdf'])
 
     if command in ('wasabi','all') :
@@ -337,7 +340,8 @@ def parse_args(command, args) :
                             "user=",
                             "subset=",
                             "outtree=",
-                            "fliptree"
+                            "fliptree",
+                            "scale="
                         ]
                     )
 
@@ -467,6 +471,9 @@ def parse_args(command, args) :
 
         elif o in ('--fliptree',) :
             options['heatmap-flip-tree'] = True
+
+        elif o in ('--scale',) :
+            options['heatmap-scale'] = expect_float("scale", a)
 
         else :
             assert False, "unhandled option %s" % o

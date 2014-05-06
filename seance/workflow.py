@@ -387,8 +387,9 @@ class WorkFlow(object) :
                              output=self.options['heatmap-pdf'],
                              include=self.options['heatmap-regex'],
                              output_tree=self.options['heatmap-out-tree'],
-                             flip_tree=self.options['heatmap-flip-tree'])
-        
+                             flip_tree=self.options['heatmap-flip-tree'],
+                             scale=self.options['heatmap-scale'])
+
         print "wrote %s" % self.options['heatmap-pdf']
         return 0
 

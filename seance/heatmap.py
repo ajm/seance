@@ -329,7 +329,7 @@ def biom_subset(biom_data, include) :
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
@@ -465,6 +465,18 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
     draw_species_labels(context, data['species'], heatmap_left_edge + heatmap_width + spacer, margin, block_len)
 
     draw_sample_labels(context, data['samples'], heatmap_left_edge, margin + heatmap_height + spacer, block_len)
+
+    # add a scale for the tree
+    tmp = margin + heatmap_height + margin
+    context.move_to((2 * margin), tmp)
+    context.line_to((2 * margin) + (scale * x_scalar), tmp)
+    context.stroke()
+
+    # and a label
+    tmp += 2
+    context.move_to((2 * margin) + (scale * x_scalar) + 2, tmp)
+    context.text_path(("%f" % scale).rstrip("0"))
+    context.fill()
 
     context.save()
     surface.finish()
