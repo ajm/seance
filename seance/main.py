@@ -507,11 +507,11 @@ def check_options(command, options) :
             exit(1)
 
     elif command == 'cluster' :
-        if options['metadata'] is None :
-            print >> stderr, "Error: you must specify a metadata file"
-            exit(1)
+        #if options['metadata'] is None :
+        #    print >> stderr, "Error: you must specify a metadata file"
+        #    exit(1)
 
-        if not system.check_file(options['metadata']) :
+        if (options['metadata'] is not None) and (not system.check_file(options['metadata'])) :
             exit(1)
 
         for i in ('duplicate-threshold', 'total-duplicate-threshold', 'sample-threshold') :

@@ -145,6 +145,16 @@ class WorkFlow(object) :
         p.end()
 
     def __preprocessed_samples(self) :
+        if self.options['metadata'] is None :
+            tmp = []
+            for sample in glob(join(self.options['outdir'], '*.sample')) :
+                md = SampleMetadata()
+                md.defaults()
+                s = basename(sample)
+                md['file'] = s[:s.find('.')]
+                tmp.append(MetadataSample(FastqFile(sample), self.options['outdir'], self.seqdb, md))
+            return tmp
+
         mdr = MetadataReader(self.options['metadata'])
         mdr.process()
 
@@ -155,8 +165,13 @@ class WorkFlow(object) :
             md = mdr.get(basename(sample))
 
             if md == None :
-                self.log.warn("skipping %s, metadata missing..." % basename(sample))
-                continue
+                self.log.warn("metadata missing for %s ..." % basename(sample))
+                md = SampleMetadata()
+                md.defaults()
+                s = basename(sample)
+                md['file'] = s[:s.find('.')]
+                #self.log.warn("skipping %s, metadata missing..." % basename(sample))
+                #continue
 
             tmp.append(MetadataSample(FastqFile(sample), self.options['outdir'], self.seqdb, md))
             md_used.append(md['file'])

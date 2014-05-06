@@ -1,4 +1,5 @@
 import math
+import datetime
 
 from functools import total_ordering
 
@@ -224,6 +225,17 @@ class Sequence(object) :
 class SampleMetadata(object) :
     def __init__(self) :
         self.data = {}
+
+    def defaults(self) :
+        self.data = {
+                'id'                : '',
+                'file'              : '',
+                'lemur'             : '',
+                'date'              : datetime.date(1970, 1, 1),
+                'location'          : '',
+                'eggs'              : -1,
+                'allow-singletons'  : False
+                }
 
     def __setitem__(self, key, value) :
         self.data[key] = value

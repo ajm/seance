@@ -118,6 +118,9 @@ class MetadataSample(Sample) :
         self.metadata = metadata
 
     def description(self) :
+        if (self.metadata['id'], self.metadata['location'], self.metadata['lemur']) == ('','','') :
+            return self.metadata['file']
+
         d = self.metadata['date']
         date = '/'.join(map(str, [d.day, d.month, d.year]))
         return ' '.join([self.metadata['id'], self.metadata['location'], self.metadata['lemur'], date])
