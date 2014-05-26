@@ -202,7 +202,8 @@ class Pagan(ExternalProgram) :
                          --xml \
                          --trim-extended-alignment \
                          --prune-keep-number 0 \
-                         --prune-extended-alignment"
+                         --prune-extended-alignment \
+                         --prune-keep-closest"
 
         #out_fname = os.path.splitext(queries)[0] + ".silva"
         out_fname = queries + ".silva"
@@ -217,7 +218,7 @@ class Pagan(ExternalProgram) :
         for f in [ queries + '.silva.' + i for i in ['fas','nhx_tree','xml'] ] :
             os.remove(f)
 
-        return out_fname + ".pruned.fas", out_fname + ".pruned.tre", out_fname + ".pruned.xml"
+        return out_fname + ".pruned_closest.fas", out_fname + ".pruned_closest.tre", out_fname + ".pruned_closest.xml"
 
 class Aligner1D(object) :
     def __init__(self) :
@@ -335,53 +336,96 @@ class BlastN(ExternalProgram) :
     def __init__(self) :
         super(BlastN, self).__init__('blastn')
         self.command = "blastn -query %s -db nr -remote -num_alignments 10 -outfmt 10"
-        self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=fasta"
+        self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=xml"
+        self.regex = {  "blast"     : "Org\-ref_taxname",
+                        "taxonomy"  : "OrgName_lineage" }
 
-    def __get_complete_desc(self, name) :
+    def __merge_taxonomy(self, names) :
+        tmp = collections.defaultdict(list)
+        for name in names :
+            for i,v in enumerate(name.split(';')) :
+                tmp[i].add(v)
+        
+        s = ""
+        for i in sorted(tmp.keys()) :
+            if len(set(tmp[i])) == 1 :
+                s += (";%s" % tmp[i][0])
+            else :
+                s += (";{%s}" % ','.join(sorted(tmp[i])))
+        
+        return s[1:]
+
+    def __get_desc_common(self, names, method) :
+        return self.__merge_taxonomy([ self.__get_desc(i[0], method) for i in names ])
+
+    def __get_desc_concat(self, names, method) :
+        return ','.join([ self.__get_desc(i[0], method) for i in names ])
+
+    def __get_desc(self, name, method) :
         try :
             f = urllib2.urlopen(self.url % name, None, 1)
-            #return '_'.join(f.readline().split('|')[-1].strip().split()[:2]).replace('.', '') # ;-P
-            line = f.readline()
-            tmp = '_'.join(line.split('|')[-1].strip().split()[:2])
-            for badchar in " \n\t:,)(;][" : # these cause problems for RaxML
-                tmp = tmp.replace(badchar, '')
+            tmp = None
 
-            if tmp == '' :
-                self.log.warn("querying ncbi eutils for %s failed (empty file), retrying..." % (name))
-                return self.__get_complete_desc(name)
+            for line in f :
+                m = re.match("\W*<%s>(.*)</%s>" % (self.regex[method], self.regex[method]), line) 
+                if m :
+                    tmp = m.group(1)
+                    break
+
+            f.close()
+
+            if tmp is None :
+                print >> sys.stderr, "Error with", name
+                tmp = "none"
+
+            if method == 'taxonomy' :
+                tmp = tmp.replace(" ", "")
 
             return tmp
-        
+
         except urllib2.HTTPError, he :
             self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
-            return self.__get_complete_desc(name)
+            return self.__get_desc(name)
 
         except urllib2.URLError, ue :
             self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(ue)))
-            return self.__get_complete_desc(name)
+            return self.__get_desc(name)
 
-    def get_names(self, fasta_fname) :
+    def get_names(self, fasta_fname, method) :
+
+        if method not in self.regex.keys() :
+            self.log.error("'%s' is not a valid labelling method" % method)
+            sys.exit(1)
+
         s,o = commands.getstatusoutput(self.command % fasta_fname)
         
         if s != 0 :
             self.log.error("blastn returned %d" % s)
             sys.exit(1)
 
-        names = {}
+        names = collections.defaultdict(list)
+        scores = {}
 
         for line in o.split('\n') :
             fields = line.split(',')
             try :
                 name = int(fields[0])
+                score = int(fields[-1])
+
+                if name not in scores :
+                    scores[name] = score
 
             except ValueError, ve :
                 self.log.warn("blast returned an id I do not understand (%s), skipping..." % (fields[0]))
                 continue
 
-            # only accept the first one
-            if name in names :
-                continue
-            
+            # only look at the highest scoring ones
+            try :
+                if scores[name] != score :
+                    continue
+            except KeyError :
+                pass
+
             try :
                 desc = fields[1].split('|')
 
@@ -390,7 +434,17 @@ class BlastN(ExternalProgram) :
                 continue
 
             if re.match(".+\.\d+", desc[3]) :
-                names[name] = "%s_%s_%s" % (fields[0], self.__get_complete_desc(desc[3]), fields[2])
+                names[name].append((desc[3], fields[2]))
+                #names[name] = "%s_%s_%s" % (fields[0], self.__get_desc(desc[3], method), fields[2])
+
+        if method == 'blast' :
+            for name in names :
+                tmp = names[name][0]
+                #names[name] = "%s_%s_%s" % (str(name), self.__get_desc(tmp[0], method), tmp[1])
+                names[name] = "%s_%s_%s" % (str(name), self.__get_desc_concat(names[name], method), tmp[1])
+        elif method == 'taxonomy' :
+            for name in names :
+                names[name] = "%s_%s" % (str(name), self.__get_desc_common(names[name], method))
 
         return names
 

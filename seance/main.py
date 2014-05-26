@@ -41,7 +41,7 @@ def get_default_options(fillin=False) :
             'sample-threshold'              : 2,
             'duplicate-threshold'           : 2,
             'otu-similarity'                : 0.99,
-            'blast-centroids'               : False,
+            'label-centroids'               : None,
             'merge-blast-hits'              : False,
             'no-homopolymer-correction'     : False,
 
@@ -117,7 +117,7 @@ def get_required_programs(command, options) :
     elif command == 'cluster' :
         tmp.append('pagan')
 
-        if options['blast-centroids'] :
+        if options['label-centroids'] :
             tmp.append('blastn')
 
     elif command == 'phylogeny' :
@@ -212,22 +212,22 @@ Legal commands are %s (see below for options).
         
         -t REAL         --similarity=REAL       (default = %s)
         
-                        --blastcentroids        (default = %s)
-                        --mergeblasthits        (default = %s)
+                        --blastcentroids        (default = False)
+                        --taxonomycentroids     (default = False)
+                        --mergeclusters         (default = %s)
                         --nohomopolymer         (default = %s)\n""" % \
                (options['metadata'],
                 str(options['total-duplicate-threshold']),
                 str(options['sample-threshold']), 
                 str(options['duplicate-threshold']),
                 str(options['otu-similarity']),
-                str(options['blast-centroids']),
                 str(options['merge-blast-hits']),
                 str(options['no-homopolymer-correction']))
 
     if command in ('phylogeny','all') :
         print >> stderr, """    Phylogeny options:
-                        --refalignment=FILE  (expects fasta)
-                        --reftree=FILE       (expects newick)
+                        --refalignment=FILE     (expects fasta)
+                        --reftree=FILE          (expects newick)
                         --clusters=FILE         (default = %s)\n""" % \
                (options['cluster-fasta'])
 
@@ -331,7 +331,8 @@ def parse_args(command, args) :
                             "verbose",
                             "help",
                             "blastcentroids",
-                            "mergeblasthits",
+                            "taxonomycentroids",
+                            "mergeclusters",
                             "chimeras",
                             "nohomopolymer",
                             "output=",
@@ -430,9 +431,12 @@ def parse_args(command, args) :
             options['silva-tree'] = a
 
         elif o in ('--blastcentroids',) :
-            options['blast-centroids'] = True
+            options['label-centroids'] = "blast"
 
-        elif o in ('--mergeblasthits',) :
+        elif o in ('--taxonomycentroids',) :
+            options['label-centroids'] = "taxonomy"
+
+        elif o in ('--mergeclusters',) :
             options['merge-blast-hits'] = True
 
         elif o in ('--chimeras',) :

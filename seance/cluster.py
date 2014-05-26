@@ -208,7 +208,7 @@ class Cluster(object) :
 
         #self.log.info("number of clusters = %d" % len(self.clusters))
 
-    def create_clusters2(self, keys=None, homopolymer_correction=True, singletons=[], sample_threshold=1) :
+    def create_clusters2(self, keys, homopolymer_correction=True, singletons=[], sample_threshold=1) :
         self.create_clusters(keys=keys.keys(), homopolymer_correction=homopolymer_correction)
 
         new_clusters = []

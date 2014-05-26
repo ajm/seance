@@ -291,13 +291,12 @@ class WorkFlow(object) :
         otu_names = {}
 
         # blast to get better names
-        if self.options['blast-centroids'] :
-            self.log.info("running blastn to get OTU names...")
-            otu_names = BlastN().get_names(
-                    self.__fasta(centroid_fname, c.centroids()))
+        if self.options['label-centroids'] :
+            self.log.info("getting OTU names...")
+            otu_names = BlastN().get_names(self.__fasta(centroid_fname, c.centroids()), self.options['label-centroids'])
 
             if self.options['merge-blast-hits'] :
-                self.log.info("merging clusters based on top blast hits")
+                self.log.info("merging clusters based on labels")
                 c.merge(otu_names)
 
 
