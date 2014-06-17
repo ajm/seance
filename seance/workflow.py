@@ -14,7 +14,7 @@ from seance.datatypes import SampleMetadata
 from seance.filters import *
 from seance.db import SequenceDB
 from seance.progress import Progress
-from seance.tools import Sff2Fastq, GetMID2, Cutadapt, Pagan, BlastN, AmpliconNoise
+from seance.tools import Sff2Fastq, GetMID2, Pagan, BlastN, AmpliconNoise
 from seance.cluster import Cluster
 from seance.biom import BiomFile
 from seance.heatmap import heatmap as phylogenetic_heatmap
@@ -126,13 +126,6 @@ class WorkFlow(object) :
         for f in self.__get_files(self.options['input-files']) :
             mid = self.__mid_fastq(f)
 
-            # does not like degenerate primers...
-#            if self.options['clipprimers'] :
-#                f = Cutadapt().run(f, 
-#                        self.options['outdir'],
-#                        self.options['forwardprimer']) #, 
-#                        #self.options['reverseprimer'])
-            
             sample = Sample(f, 
                         self.options['outdir'],
                         self.seqdb, 
