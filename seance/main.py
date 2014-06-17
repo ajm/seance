@@ -62,6 +62,7 @@ def get_default_options(fillin=False) :
             'heatmap-flip-tree' : False,
             'heatmap-scale'     : 0.05,
             'heatmap-tree-height' : 20,
+            'heatmap-label-clip'  : [],
 
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
             'wasabi-user'       : None,
@@ -212,8 +213,7 @@ Legal commands are %s (see below for options).
         
         -t REAL         --similarity=REAL       (default = %s)
         
-                        --blastcentroids        (default = False)
-                        --taxonomycentroids     (default = False)
+                        --labels=X              (default = taxonomy, options= (none, blast, taxonomy))
                         --mergeclusters         (default = %s)
                         --nohomopolymer         (default = %s)\n""" % \
                (options['metadata'],
@@ -239,9 +239,10 @@ Legal commands are %s (see below for options).
                         --subset=REGEX
                         --outtree=FILE          (output tree used in separate newick file)
                         --fliptree              (flip tree upside down)
+                        --labelclip=X           (comma separated values, e.g.: nematoda,arthropoda)
                         --scale=FLOAT           (set length of tree scale, default = %.2f)
                         --height=INT            (set height of tree in heatmap blocks, default = %d)
-                        --output=FILE           (default = %s.pdf)\n""" % \
+                        --output=FILE           (default = %s)\n""" % \
                (options['cluster-biom'],
                 options['phylogeny-tree'],
                 options['heatmap-scale'],
@@ -330,8 +331,7 @@ def parse_args(command, args) :
                             "output=",
                             "verbose",
                             "help",
-                            "blastcentroids",
-                            "taxonomycentroids",
+                            "labels=",
                             "mergeclusters",
                             "chimeras",
                             "nohomopolymer",
@@ -347,13 +347,14 @@ def parse_args(command, args) :
                             "outtree=",
                             "fliptree",
                             "treescale=",
-                            "treeheight="
+                            "treeheight=",
+                            "labelclip="
                         ]
                     )
 
     except getopt.GetoptError, err :
         print >> stderr, str(err) + "\n"
-        usage()
+        usage(command)
         exit(1)
 
     for o,a in opts :
@@ -430,11 +431,17 @@ def parse_args(command, args) :
         elif o in ('--reftree',) :
             options['silva-tree'] = a
 
-        elif o in ('--blastcentroids',) :
-            options['label-centroids'] = "blast"
-
-        elif o in ('--taxonomycentroids',) :
-            options['label-centroids'] = "taxonomy"
+        elif o in ('--labels',) :
+            methods = ['none', 'blast', 'taxonomy']
+            if a in methods :
+                if a == 'none' :
+                    options['label-centroids'] = None
+                else :
+                    options['label-centroids'] = a
+            else :
+                print >> stderr, "ERROR %s is not a valid labelling method (valid options: %s)" % \
+                        (bold(a), list_sentence(bold_all(methods)))
+                exit(1)
 
         elif o in ('--mergeclusters',) :
             options['merge-blast-hits'] = True
@@ -486,6 +493,9 @@ def parse_args(command, args) :
 
         elif o in ('--treeheight',) :
             options['heatmap-tree-height'] = expect_int("treeheight", a)
+
+        elif o in ('--labelclip',) :
+            options['heatmap-label-clip'] = [ i.lower() for i in a.split(',') ]
 
         else :
             assert False, "unhandled option %s" % o

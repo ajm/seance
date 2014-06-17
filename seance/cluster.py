@@ -2,6 +2,7 @@ import sys
 import os
 import collections
 import logging
+import tempfile
 
 from seance.system import System
 from seance.tools import Pagan
@@ -140,12 +141,15 @@ class Cluster(object) :
 
     def alignment_similarity(self, seq1, seq2, homopolymer_correction) :
         # write out
-        f = open(os.path.join(System.tempdir(), 'tmp'), 'w')
+        #f = open(os.path.join(System.tempdir(), 'tmp'), 'w')
+        fd,fpath = tempfile.mkstemp(suffix='cluster')
+        f = open(fpath, 'w')
 
         print >> f, seq1.fasta()
         print >> f, seq2.fasta()
 
         f.close()
+        os.close(fd)
 
         # align
         aligned = []

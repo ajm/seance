@@ -8,6 +8,7 @@ import logging
 import glob
 import shutil
 import collections
+import socket
 
 from os.path import abspath, join, dirname
 from seance.filetypes import SffFile, FastqFile
@@ -155,12 +156,16 @@ class Pagan(ExternalProgram) :
         # pagan always adds '.fas'
         return FastqFile(out_fname + ".fas")
 
-    def phylogenetic_alignment(self, fasta_fname) :
-        command = "pagan --seqfile %s --outfile %s --raxml-tree --xml" # &> /dev/null"
+    def phylogenetic_alignment(self, fasta_fname, tree_fname=None) :
         out_fname = fasta_fname + ".out"
 
+        if tree_fname :
+            command = "pagan --seqfile %s --treefile %s --outfile %s --xml" % (fasta_fname, tree_fname, out_fname)
+        else :
+            command = "pagan --seqfile %s --raxml-tree --outfile %s --xml" % (fasta_fname, out_fname)
+
         try :
-            self.system(command % (fasta_fname, out_fname))
+            self.system(command)
 
         except ExternalProgramError, epe :
             self.log.error(str(epe))
@@ -344,14 +349,15 @@ class BlastN(ExternalProgram) :
         tmp = collections.defaultdict(list)
         for name in names :
             for i,v in enumerate(name.split(';')) :
-                tmp[i].add(v)
+                tmp[i].append(v)
         
         s = ""
         for i in sorted(tmp.keys()) :
             if len(set(tmp[i])) == 1 :
                 s += (";%s" % tmp[i][0])
             else :
-                s += (";{%s}" % ','.join(sorted(tmp[i])))
+                break
+                #s += (";{%s}" % ','.join(sorted(tmp[i])))
         
         return s[1:]
 
@@ -385,11 +391,15 @@ class BlastN(ExternalProgram) :
 
         except urllib2.HTTPError, he :
             self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
-            return self.__get_desc(name)
+            return self.__get_desc(name, method)
 
         except urllib2.URLError, ue :
             self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(ue)))
-            return self.__get_desc(name)
+            return self.__get_desc(name, method)
+
+        except socket.timeout, to :
+            self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(to)))
+            return self.__get_desc(name, method)
 
     def get_names(self, fasta_fname, method) :
 
@@ -410,13 +420,14 @@ class BlastN(ExternalProgram) :
             fields = line.split(',')
             try :
                 name = int(fields[0])
-                score = int(fields[-1])
+                score = float(fields[-1])
 
                 if name not in scores :
                     scores[name] = score
 
             except ValueError, ve :
-                self.log.warn("blast returned an id I do not understand (%s), skipping..." % (fields[0]))
+                self.log.warn("problem with blast result (%s), skipping..." % (str(ve)))
+                print line
                 continue
 
             # only look at the highest scoring ones
@@ -440,11 +451,11 @@ class BlastN(ExternalProgram) :
         if method == 'blast' :
             for name in names :
                 tmp = names[name][0]
-                #names[name] = "%s_%s_%s" % (str(name), self.__get_desc(tmp[0], method), tmp[1])
-                names[name] = "%s_%s_%s" % (str(name), self.__get_desc_concat(names[name], method), tmp[1])
+                names[name] = "%s_%s" % (self.__get_desc(tmp[0], method), tmp[1])
+                #names[name] = "%s_%s" % (self.__get_desc_concat(names[name], method), tmp[1])
         elif method == 'taxonomy' :
             for name in names :
-                names[name] = "%s_%s" % (str(name), self.__get_desc_common(names[name], method))
+                names[name] = "%s" % (self.__get_desc_common(names[name], method))
 
         return names
 
@@ -810,6 +821,23 @@ class Cutadapt(ExternalProgram) :
             sys.exit(1)
 
         return FastqFile(outfile)
+
+class Mafft(ExternalProgram) :
+    def __init__(self) :
+        super(Mafft, self).__init__('mafft')
+        self.command = "mafft --auto %s > %s"
+
+    def run(self, fasta_in) :
+        fasta_out = "%s.out" % fasta_in
+
+        try :
+            self.system(self.command % (fasta_in, fasta_out))
+
+        except ExternalProgramError, epe :
+            self.log.error(str(epe))
+            sys.exit(1)
+
+        return FastqFile(fasta_out)
 
 if __name__ == '__main__' :
     log = logging.getLogger('seance')

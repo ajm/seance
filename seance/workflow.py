@@ -314,7 +314,7 @@ class WorkFlow(object) :
         else :
             for key in keys :
                 s = self.seqdb.get(key)
-                print >> f, ">%s" % (names.get(key, "%d_unknown" % key))
+                print >> f, ">seance%s %s" % (str(key), names.get(key, "unknown"))
                 print >> f, s.sequence
 
         f.close()
@@ -328,7 +328,7 @@ class WorkFlow(object) :
 
         output_clusters = clustering.clusters
         output_samples = [ s for s in samples if s.contains(all_keys) ]
-        output_otus = [ cluster_names.get(k, "%d_unknown" % k) for k in centroids ]
+        output_otus = [ ("seance%s" % str(k), cluster_names.get(k, "unknown")) for k in centroids ]
 
         self.log.info("%d / %d samples have at least one sequence used in clustering" % \
                 (len(output_samples), len(samples)))
@@ -403,7 +403,8 @@ class WorkFlow(object) :
                              output_tree=self.options['heatmap-out-tree'],
                              flip_tree=self.options['heatmap-flip-tree'],
                              scale=self.options['heatmap-scale'],
-                             tree_height_blocks=self.options['heatmap-tree-height'])
+                             tree_height_blocks=self.options['heatmap-tree-height'],
+                             label_clips=self.options['heatmap-label-clip'])
 
         print "wrote %s" % self.options['heatmap-pdf']
         return 0

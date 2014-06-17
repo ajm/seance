@@ -1,5 +1,6 @@
 import sys
 import datetime
+import json
 
 class BiomFile(object) :
     def __init__(self) :
@@ -36,6 +37,10 @@ class BiomFile(object) :
         tmp["Lemur"] = md["lemur"]
         tmp["Location"] = md["location"]
         tmp["Eggs"] = str(md["eggs"])
+        return tmp
+
+    def sample_metadata_str(self, sample_name) :
+        tmp = self.sample_metadata(sample_name)
         return "{ " + ", ".join(map(lambda x: "%s : %s" % (repr(x[0]).replace("'","\""), repr(x[1]).replace("'","\"")), tmp.items())) + " }"
 
     def write_to(self, filename) :
@@ -44,34 +49,30 @@ class BiomFile(object) :
         f.close()
 
     def write(self, f=sys.stdout) :
-        print >> f, '{'
+        tmp = {}
 
-        print >> f, '\t"id":null,'
-        print >> f, '\t"format": "Biological Observation Matrix 0.9.1-dev",'
-        print >> f, '\t"format_url": "http://biom-format.org/documentation/format_versions/biom-1.0.html",'
-        print >> f, '\t"type": "OTU table",'
-        print >> f, '\t"generated_by": "lemurs shitting in traps",'
-        print >> f, '\t"date": "' + datetime.date.today().isoformat() + '",'
+        tmp["id"] = "null"
+        tmp["format"] = "Biological Observation Matrix 0.9.1-dev"
+        tmp["format_url"] = "http://biom-format.org/documentation/format_versions/biom-1.0.html"
+        tmp["type"] = "OTU table"
+        tmp["generated_by"] = "seance"
+        tmp["date"] = datetime.date.today().isoformat()
+        tmp["rows"] = []
+        tmp["columns"] = []
+        tmp["matrix_type"] = "sparse"
+        tmp["matrix_element"] = "int"
+        tmp["shape"] = [len(self.otus), len(self.samples)]
+        tmp["data"] = []
 
-        print >> f, '\t"rows":['
-        for i in self.otus :
-            print >> f, "\t\t{ \"id\":\"%s\", \"metadata\":null }%s" % (i, "," if i != self.otus[-1] else "")
-        print >> f, '\t],'
-        
-        print >> f, '\t"columns":['
+        for id,label in self.otus :
+            tmp["rows"].append({ "id" : id, "metadata" : { "label" : label } })
+
         for i in self.samples :
-            print >> f, "\t\t{ \"id\":\"%s\", \"metadata\": %s }%s" % (i, self.sample_metadata(i), "," if i != self.samples[-1] else "")
-        print >> f, '\t],'
+            tmp["columns"].append({ "id" : i, "metadata" : self.sample_metadata(i) })
 
-        print >> f, '\t"matrix_type": "sparse",'
-        print >> f, '\t"matrix_element_type": "int",'
-
-        print >> f, "\t\"shape\": [%d, %d]," % (len(self.otus), len(self.samples))
-        
-        print >> f, '\t"data":['
         for i in self.data :
-            print >> f, "\t\t[%d, %d, %d]%s" % (i[0], i[1], i[2], "," if i != self.data[-1] else "")
-        print >> f, '\t]'
+            tmp["data"].append(i)
 
-        print >> f, '}'
+
+        print >> f, json.dumps(tmp, sort_keys=True, indent=2, separators=(',',": "))
 

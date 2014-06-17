@@ -119,24 +119,32 @@ def preprocess_data(tree_data, biom_data) :
         for i in not_found :
             print >> stderr, "\t%s" % i
 
+    id2label = dict([ (species[i]['id'], species[i]['metadata']['label']) for i in seen_species ])
+
     return { 
              'tree'    : new_tree,
-             'species' : species_name_transform(new_species),
+             'species' : species_name_transform(new_species, id2label),
              'samples' : new_samples,
              'counts'  : new_counts
             }
 
-def species_name_transform(species) :
+def species_name_transform(species, id2label) :
     new_species = []
 
-    for s in species :
+    for i in species :
+        s = id2label[i]
         if s.endswith('unknown') :
             new_species.append('Unknown')
             continue
 
-        tmp = s.split('_')
-        identity = "(%s%%)" % tmp[-1]
-        new_species.append(' '.join(tmp[1:-1] + [identity]))
+        try :
+            # blast labels
+            tmp = s.split('_')
+            identity = "(%.2f%%)" % float(tmp[-1])
+            new_species.append(' '.join(tmp[:-1] + [identity]))
+        except ValueError :
+            # taxonomy labels
+            new_species.append(s)
 
     return new_species
 
@@ -160,7 +168,7 @@ def prune_tree(tree, species_names) :
             return [subtree,distance]
 
         #print >> stderr, "prune_tree: did not find %s" % subtree
-        return None,None
+        return [None,None]
 
     subtree0,distance0 = prune_tree(subtree[0], species_names)
     subtree1,distance1 = prune_tree(subtree[1], species_names)
@@ -174,7 +182,7 @@ def prune_tree(tree, species_names) :
         if subtree1 :
             return [subtree1,distance+distance1]
         else :
-            return None,None
+            return [None,None]
 
 def get_dfs_order(tree, tip_list) :
     subtree,distance = tree
@@ -329,7 +337,7 @@ def biom_subset(biom_data, include) :
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20, label_clips=[]) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
@@ -342,6 +350,23 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
         newick_data = flip_tree_horizontal(newick_data)
 
     data = preprocess_data(newick_data, biom_data)
+
+    # reduce label length based on user provided strings
+    tmp = []
+    for i in data["species"] :
+        newlabel = None
+        for j in label_clips :
+            index = i.lower().find(j)
+            if index != -1 :
+                newlabel = i[index:]
+                break
+        if newlabel :
+            tmp.append(newlabel)
+        else :
+            tmp.append(i)
+
+    data["species"] = tmp
+    # xxx
 
     if output_tree is not None :
         with open(output_tree, 'w') as f :

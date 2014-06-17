@@ -28,6 +28,26 @@ class IUPAC(object) :
         ''      : '-'
     }
 
+    reverse_mapping = {
+        'A' : 'A',
+        'C' : 'C',
+        'G' : 'G',
+        'T' : 'T',
+        'U' : 'U',
+        'M' : 'AC',
+        'R' : 'AG',
+        'W' : 'AT',
+        'S' : 'CG',
+        'Y' : 'CT',
+        'K' : 'GT',
+        'V' : 'ACG',
+        'H' : 'ACT',
+        'D' : 'AGT',
+        'B' : 'CGT',
+        'N' : 'ACGT',
+        '-' : ''
+    }
+
     @staticmethod
     def close_enough(primer, sequence, diff) :
         if diff < 0 :
@@ -39,19 +59,45 @@ class IUPAC(object) :
         m = IUPAC.equal(sequence[0], primer[0])
 
         return IUPAC.close_enough(primer[1:], sequence[1:], diff if m else diff-1) or \
-               IUPAC.close_enough(primer[1:], sequence, diff-1) or \
-               IUPAC.close_enough(primer, sequence[1:], diff-1)
+               IUPAC.close_enough(primer[1:], sequence,     diff-1) or \
+               IUPAC.close_enough(primer,     sequence[1:], diff-1)
 
     @staticmethod
-    def equal(base, iupac) :
-        if   base == 'A' :
-            return iupac in "AMRWVHDN"
-        elif base == 'G' :
-            return iupac in "GRSKVDBN"
-        elif base == 'T' :
-            return iupac in "TWYKHDBN"
-        elif base == 'C' :
-            return iupac in "CMSYVHBN"
+    def seq_position(primer, sequence, diff) :
+        for i in range(len(sequence) - len(primer)) :
+            if IUPAC.close_enough(primer, sequence[i:], diff) :
+                return i
+        return -1
+    
+    @staticmethod
+    def seq_position_reverse(primer, sequence, diff) :
+        for i in range(len(sequence) - len(primer))[::-1] :
+            if IUPAC.close_enough(primer, sequence[i:], diff) :
+                return i
+        return -1
+
+#    @staticmethod
+#    def equal(base, iupac) :
+#        if   base == 'A' :
+#            return iupac in "AMRWVHDN"
+#        elif base == 'G' :
+#            return iupac in "GRSKVDBN"
+#        elif base == 'T' :
+#            return iupac in "TWYKHDBN"
+#        elif base == 'C' :
+#            return iupac in "CMSYVHBN"
+
+    # now both can contain iupac characters
+    @staticmethod
+    def equal(a, b) :
+        a2 = IUPAC.reverse_mapping[a]
+        b2 = IUPAC.reverse_mapping[b]
+
+        for i in a2 :
+            if i in b2 :
+                return True
+        
+        return False
 
     @staticmethod
     def get(bases) :
@@ -74,30 +120,8 @@ class Sequence(object) :
                     (len(self.sequence), len(self.qual_str)))
 
         self.qualities = self.__generate_quals(qual_str)
-        #self.compressed = self.__compress(self.sequence)
         self.duplicates = 1
         self.id = None
-
-#    def __compress(self, seq) :
-#        tmp = seq[0]
-#
-#        for i in seq[1:] :
-#            if tmp[-1] != i :
-#                tmp += i
-#
-#        return tmp
-
-#    def __compress2(self, seq, length) :
-#        ctmp = stmp = seq[0]
-#
-#        for i in seq[1:] :
-#            stmp += i
-#            if ctmp[-1] != i :
-#                ctmp += i
-#            if len(ctmp) == length :
-#                break
-#
-#        return ctmp, stmp
 
     def __generate_quals(self, qual_str) :
         if qual_str is None :
@@ -107,25 +131,16 @@ class Sequence(object) :
 
     def truncate(self, length) :
         self.sequence = self.sequence[:length]
-        #self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
             self.qual_str = self.qual_str[:length]
             self.qualities = self.qualities[:length]
-
-#    def ctruncate(self, length) :
-#        self.compressed, self.sequence = self.__compress2(self.sequence, length)
-#        
-#        if self.qual_str :
-#            self.qual_str = self.qual_str[:len(self.sequence)]
-#            self.qualities = self.qualities[:len(self.sequence)]
 
     def rtrim(self, char='-') :
         self.truncate(len(self.sequence.rstrip(char)))
 
     def ltrim(self, char='-') :
         self.sequence = self.sequence.lstrip(char)
-        #self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
             tmp = len(self.qual_str) - len(self.sequence)
@@ -134,11 +149,16 @@ class Sequence(object) :
 
     def remove_mid(self, mid_length) :
         self.sequence = self.sequence[mid_length:]
-        #self.compressed = self.__compress(self.sequence)
 
         if self.qual_str :
             self.qual_str = self.qual_str[mid_length:]
             self.qualities = self.qualities[mid_length:]
+
+    def ungap(self) :
+        self.sequence = self.sequence.replace('-','')
+
+    def back_translate(self) :
+        self.sequence = self.sequence.replace('U','T')
 
     # XXX necessary?
     def is_singular(self) :
