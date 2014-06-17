@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-from distutils.core import setup
+from setuptools import setup
 
 setup(name='Seance',
       version='0.1',
@@ -11,7 +10,10 @@ setup(name='Seance',
       long_description='Evolutionary Analysis and Visualisation of Metagenomic Datasets',
       platforms=['*nix'],
       packages=['seance'],
-      requires=[''],
+      install_requires=[
+          'biopython >= 1.6', 
+          'dendropy >= 3.12'
+          ],
       scripts=['scripts/seance'],
      )
 

@@ -340,7 +340,8 @@ class Uchime(ExternalProgram) :
 class BlastN(ExternalProgram) :
     def __init__(self) :
         super(BlastN, self).__init__('blastn')
-        self.command = "blastn -query %s -db nr -remote -num_alignments 10 -outfmt 10"
+        #self.command = "blastn -query %s -db nr -remote -num_alignments 10 -outfmt 10"
+        self.command = "blastn -query %s -db nr -remote -task megablast -outfmt 10"
         self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=xml"
         self.regex = {  "blast"     : "Org\-ref_taxname",
                         "taxonomy"  : "OrgName_lineage" }
@@ -425,29 +426,28 @@ class BlastN(ExternalProgram) :
                 if name not in scores :
                     scores[name] = score
 
+                # only keep the highest scoring hits
+                if scores[name] != score :
+                    continue
+
             except ValueError, ve :
                 self.log.warn("problem with blast result (%s), skipping..." % (str(ve)))
                 print line
                 continue
 
-            # only look at the highest scoring ones
-            try :
-                if scores[name] != score :
-                    continue
-            except KeyError :
-                pass
 
             try :
                 desc = fields[1].split('|')
+
+                if re.match(".+\.\d+", desc[3]) :
+                    names[name].append((desc[3], fields[2]))
+                    #names[name] = "%s_%s_%s" % (fields[0], self.__get_desc(desc[3], method), fields[2])
 
             except IndexError :
                 self.log.warn("could not split line from blastn: %s" % str(fields))
                 continue
 
-            if re.match(".+\.\d+", desc[3]) :
-                names[name].append((desc[3], fields[2]))
-                #names[name] = "%s_%s_%s" % (fields[0], self.__get_desc(desc[3], method), fields[2])
-
+        # now generate labels
         if method == 'blast' :
             for name in names :
                 tmp = names[name][0]
@@ -695,170 +695,4 @@ class AmpliconNoise(ExternalProgram) :
             os.remove(fname)
 
         return FastqFile(output_name)
-
-class PyroNoiseMothur(ExternalProgram) :
-    def __init__(self) :
-        super(PyroNoiseMothur, self).__init__('PyroNoise')
-        self.command = "mothur \"#sff.multiple(file=tmp.txt, maxhomop=%d, pdiffs=0, bdiffs=%d, minflows=360)\" &> /dev/null"
-
-    def delete_intermediates(self, prefix) :
-        suffix = ['.fasta', '.flow', '.flow.files', '.qual', '.scrap.flow', '.summary', '.trim.flow']
-        files = ['tmp.oligos', 'tmp.txt', 'not found.shhh.fasta', 'not found.shhh.names'] + glob.glob("mothur.*.logfile")
-        for f in [ prefix + i for i in suffix ] + files :
-            try :
-                os.remove(f)
-            except OSError :
-                pass
-
-    def run(self, sff, outdir, forward_primer, barcode, barcode_errors, max_homopolymers) :
-        # 1. ensure SFF file name does not contain hyphens
-        # 2. write singular.txt
-        #   eg: Tg_2_25062012_1.sff singular.oligos
-        # 3. write singular.oligos
-        #   eg: forward AGRGGTGAAATYCGTGGAC
-        #       barcode TACAG Tg_2_25062012_1
-        # 4. run mothur "#sff.multiple(file=singular.txt, maxhomop=8, pdiffs=2, bdiffs=1)"
-        # 5. output : singular.singular.fasta   - rename
-        #             singular.singular.groups  - kill
-        #             singular.singular.names   - kill
-        
-        if not isinstance(sff, SffFile) :
-            raise ExternalProgramError("argument is not an SffFile")
-
-        cwd = os.getcwd()
-        
-        old_sff_name = abspath(sff.get_filename())
-        new_sff_name = sff.get_basename().replace('-', '_')
-        output_name = abspath(join(outdir, sff.get_basename() + '.fasta'))
-        sff_prefix,sff_ext = os.path.splitext(new_sff_name)
-
-        os.chdir(outdir)
-
-        #print os.getcwd()
-        #print old_sff_name
-        #print new_sff_name        
-
-        try :
-            os.symlink(old_sff_name, new_sff_name)
-        except OSError :
-            pass
-            #print >> sys.stderr, "could not create symlink"
-
-        # create batch file
-        f = open('tmp.txt', 'w')
-        print >> f, "%s tmp.oligos" % new_sff_name
-        f.close()
-
-        # create oligos file
-        f = open('tmp.oligos', 'w')
-        print >> f, "forward %s" % forward_primer
-        print >> f, "barcode %s %s" % (barcode, new_sff_name)
-        f.close()
-
-        # run mothur
-        if os.system(self.command % (max_homopolymers, barcode_errors)) != 0 :
-            # mothur segfaults on empty files (or is it files where nothing
-            # passes qc?), just create an empty file and return
-            open(output_name, 'w').close()
-            os.remove(new_sff_name)
-            self.delete_intermediates(sff_prefix)
-            os.chdir(cwd)
-            return FastqFile(output_name)
-
-        # rename to what we want to call it
-        os.rename('tmp.tmp.fasta', output_name)
-
-        # 6.
-        # merge output files to get number of duplicates 
-        # in fasta file
-        counts = {}
-        f = open(new_sff_name[:-3] + 'shhh.trim.summary')
-        f.readline()
-        for line in f :
-            seqname,start,end,nbases,ambigs,polymer,numseqs = line.strip().split()
-            counts[seqname] = int(numseqs)
-        f.close()
-
-        f = FastqFile(new_sff_name[:-3] + 'shhh.trim.fasta')
-        out_fasta = open(output_name, 'w')
-        f.open()
-        for seq in f :
-            print >> out_fasta, "%s NumDuplicates=%d\n%s\n" % (seq.id, counts[seq.id[1:]], seq.sequence)
-        f.close()
-        out_fasta.close()
-
-        self.delete_intermediates(sff_prefix)
-        os.chdir(cwd)
-
-        return FastqFile(output_name)
-
-class Cutadapt(ExternalProgram) :
-    def __init__(self) :
-        super(Cutadapt, self).__init__('cutadapt')
-
-    def run(self, fastq, outdir, forwardprimer, reverseprimer=None) :
-        command = "cutadapt"
-
-        if (forwardprimer == None) and (reverseprimer == None) :
-            return fastq
-
-        if forwardprimer != None :
-            command += (" -b %s" % forwardprimer)
-
-        if reverseprimer != None :
-            command += (" -a %s" % reverseprimer)
-
-        #command += " --trimmed-only -e 0.0"
-
-        outfile = "%s.adaptortrim" % join(outdir, fastq.get_basename())
-        command += (" %s > %s 2> /dev/null" % (fastq.get_filename(), outfile))
-
-        try :
-            self.system(command)
-
-        except ExternalProgramError, epe :
-            self.log.error(str(epe))
-            sys.exit(1)
-
-        return FastqFile(outfile)
-
-class Mafft(ExternalProgram) :
-    def __init__(self) :
-        super(Mafft, self).__init__('mafft')
-        self.command = "mafft --auto %s > %s"
-
-    def run(self, fasta_in) :
-        fasta_out = "%s.out" % fasta_in
-
-        try :
-            self.system(self.command % (fasta_in, fasta_out))
-
-        except ExternalProgramError, epe :
-            self.log.error(str(epe))
-            sys.exit(1)
-
-        return FastqFile(fasta_out)
-
-if __name__ == '__main__' :
-    log = logging.getLogger('seance')
-    log.setLevel(logging.DEBUG)
-
-    ch = logging.StreamHandler()
-    ch.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
-
-    log.addHandler(ch)
-
-    # ---
-
-    #p = PyroNoiseMothur()
-    p = AmpliconNoise() 
-   
-    sff_filename = "/Users/ajm/research/coding/mothra/test_files/Tg_12-25062012-1.sff"
-    outdir = "."
-    primer = "AGRGGTGAAATYCGTGGAC"
-    barcode = "CATGC"
-    barcode_errors = 0
-    max_homopolymers = 8
-
-    p.run(SffFile(sff_filename), outdir, primer, barcode, barcode_errors, max_homopolymers)
 

@@ -1,3 +1,19 @@
+#Seance: a bioinformatics pipeline for reference-based phylogenetic analysis
+#Copyright (C) 2014  Alan Medlar (amedlar@gmail.com)
+#
+#This program is free software: you can redistribute it and/or modify
+#it under the terms of the GNU General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
+#
+#This program is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+#
+#You should have received a copy of the GNU General Public License
+#along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import os
 import getopt
 import logging
@@ -95,43 +111,64 @@ def apply_prefix(d, command='all') :
         d['phylogeny-xml'] = tmp + '.phylogeny.xml'
 
 def get_all_programs() :
-    return ['sff2fastq', 'pagan', 'raxml', 'bppphysamp', 'exonerate', 'uchime', 'blastn', 'ampliconnoise']
+    return ['sff2fastq', 'pagan', 'raxml', 'bppphysamp', 'exonerate', 'uchime', 'blastn', 'PyroDist', 'FCluster', 'PyroNoise']
 
-def get_required_programs(command, options) :
-    tmp = []
+def test_system(command=None, exit_on_failure=False) :
+    binaries = { 
+        'preprocess' : {
+            '*'         : ['sff2fastq'],
+            'chimeras'  : ['uchime'],
+            'denoise'   : ['PyroDist', 'FCluster', 'PyroNoise'],
+        },
+        'cluster' : {
+            '*'         : ['pagan'],
+            'label'     : ['blastn']
+        },
+        'phylogeny' : {
+            '*'         : ['pagan', 'exonerate', 'bppphysamp'],
+            'denovo'    : ['raxml']
+        },
+        'heatmap' : {},
+        'wasabi' : {},
+        'test' : {}
+    }
 
-    if command == 'preprocess' :
-        if options['chimeras'] :
-            tmp.append('uchime')
+    fail = False
 
-        if '.sff' in [splitext(i)[1] for i in options['input-files']] :
-            tmp.append('sff2fastq')
+    for b in [command] if command else binaries :
+        if binaries[b] :
+            print "checking system for %s command dependancies :" % bold(b)
+            for o in binaries[b] :
+                for p in binaries[b][o] :
+                    installed = System.is_installed(p)
+                    print "    %s %s%s" % (p, "" if o == "*" else "(needed for --%s) " % o, bold_green("found.") if installed else bold_red("not found!"))
+                    
+                    if not installed :
+                        fail = True    
+            print ""
 
-        if options['denoise'] :
-            tmp.append('PyroDist')
-            tmp.append('FCluster')
-            tmp.append('PyroNoise')
+    # for some reason using pip to install cairo always fails
+    # so check for it here instead
+    print "checking for python modules :"
+    try :
+        import cairo
+        print "    pycairo (needed by 'heatmap' command) " + bold_green("found.")
+    except ImportError :
+        print "    pycairo (needed by 'heatmap' command) " + bold_red("not found!")
+        fail = True
+    print ""
 
-        #if options['clipprimers'] :
-        #    tmp.append('cutadapt')
-
-    elif command == 'cluster' :
-        tmp.append('pagan')
-
-        if options['label-centroids'] :
-            tmp.append('blastn')
-
-    elif command == 'phylogeny' :
-        tmp.append('pagan')
-        tmp.append('exonerate')
-
-        if not options['silva-fasta'] :
-            tmp.append('raxml')
-
-    return tmp
+    if exit_on_failure and fail :
+        exit(1)
 
 def get_commands() :
-    return ['preprocess', 'cluster', 'phylogeny', 'heatmap', 'wasabi']
+    return ['test', 'preprocess', 'cluster', 'phylogeny', 'heatmap', 'wasabi']
+
+def bold_green(s) :
+    return "\033[32m%s\033[0m" % s
+
+def bold_red(s) :
+    return "\033[31m%s\033[0m" % s
 
 def bold(s) :
     return "\033[1m%s\033[0m" % s
@@ -569,12 +606,15 @@ def main() :
         usage()
         return 1
 
+    if command == 'test' :
+        test_system()
+        return 0
+
     options = parse_args(command, argv[2:])
     setup_logging(options['verbose'])
     check_options(command, options)
 
-    system = System()
-    system.check_local_installation(get_required_programs(command, options))
+    test_system(command, exit_on_failure=True)
     System.tempdir(options['outdir']) # some objects need this set
 
     wf = WorkFlow(options)

@@ -1,10 +1,13 @@
 from sys import exit, stderr, argv
 from math import log10, pi
 import re
-#from newick import parse as newick
 import json
 
-import cairo
+try :
+    import cairo
+
+except ImportError :
+    pass
 
 # height, width, font size, tree width
 # or just box width and everything derives from that

@@ -28,7 +28,13 @@ class System(object) :
 
     @staticmethod
     def tempfilename(ext="") :
-        return tempfile.mktemp(dir=System.tempdir()) + ext
+        fd,fpath = tempfile.mkstemp(dir=System.tempdir(), suffix=ext)
+        os.close(fd)
+        return fpath
+
+    @staticmethod
+    def is_installed(p) :
+        return ExternalProgram.get_path(p) != None
 
     def check_local_installation(self, required_programs) :
         bad = False
