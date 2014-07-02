@@ -4,7 +4,8 @@ import re
 import json
 
 try :
-    import cairo
+    #import cairo
+    import cairocffi as cairo
 
 except ImportError :
     pass
@@ -340,7 +341,7 @@ def biom_subset(biom_data, include) :
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20, label_clips=[]) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20, label_clips=[], label_tokens=-1) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree) if tree is not None else None
@@ -363,6 +364,10 @@ def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, in
             if index != -1 :
                 newlabel = i[index:]
                 break
+
+        if label_tokens != -1 :
+            newlabel = ';'.join(i.split(';')[-label_tokens:])
+
         if newlabel :
             tmp.append(newlabel)
         else :

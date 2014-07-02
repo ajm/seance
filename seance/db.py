@@ -1,16 +1,4 @@
-import sys
-import operator
-import bisect
-import collections
-import os
-
-from functools import total_ordering
-
 from seance.datatypes import Sequence, SequenceError, IUPAC
-from seance.tools import Pagan, Aligner1D
-from seance.system import System
-from seance.progress import Progress
-
 
 class SequenceDB(object) :
     def __init__(self, preprocessed=False) :

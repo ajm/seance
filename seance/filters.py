@@ -45,6 +45,9 @@ class MultiFilter(Filter) :
     def __len__(self) :
         return len(self.filters)
 
+    def filter_counts(self) :
+        return [(f.__class__.__name__ , self.counts[i]) for i,f in enumerate(self.filters)]
+
     def __str__(self) :
         s = ""
         for index,f in enumerate(self.filters) :

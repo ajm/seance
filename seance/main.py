@@ -26,11 +26,11 @@ from seance.system import System
 
 
 __program__ = "seance"
-verbose_level = logging.DEBUG # logging.INFO
+verbose_level = logging.INFO
 default_dir = './out'
 default_prefix = 'seance'
 
-def get_default_options(fillin=False) :
+def get_default_options(command, fillin=False) :
     global default_dir
 
     tmp = {
@@ -57,10 +57,15 @@ def get_default_options(fillin=False) :
             'sample-threshold'              : 2,
             'duplicate-threshold'           : 2,
             'otu-similarity'                : 0.99,
-            'label-centroids'               : None,
             'merge-blast-hits'              : False,
             'no-homopolymer-correction'     : False,
 
+            'summary-file'      : None,
+
+            'label-centroids'   : 'none',
+            'label-missing'     : False,
+
+            'delimiter'         : '\t',
             'prefix'            : default_prefix,
             'cluster-fasta'     : None,
             'cluster-biom'      : None,
@@ -70,6 +75,7 @@ def get_default_options(fillin=False) :
 
             'silva-fasta'       : None,
             'silva-tree'        : None,
+            'denovo-tree'       : False,
 
             'heatmap-no-tree'   : False,
             'heatmap-pdf'       : 'seance.pdf',
@@ -79,6 +85,7 @@ def get_default_options(fillin=False) :
             'heatmap-scale'     : 0.05,
             'heatmap-tree-height' : 20,
             'heatmap-label-clip'  : [],
+            'heatmap-label-tokens' : -1,
 
             'wasabi-url'        : 'http://wasabi2.biocenter.helsinki.fi:8000',
             'wasabi-user'       : None,
@@ -89,11 +96,16 @@ def get_default_options(fillin=False) :
     if fillin :
         apply_prefix(tmp)
 
+    if command == 'labels' :
+        tmp['label-centroids'] = 'taxonomy'
+
     return tmp
 
 def apply_prefix(d, command='all') :
     tmp = d['prefix']
     tmp = join(d['outdir'], tmp)
+
+    d['summary-file'] = join(d['outdir'], 'summary.csv')
 
     if not d['cluster-fasta'] :
         d['cluster-fasta']   = tmp + '.cluster.fasta'
@@ -113,7 +125,7 @@ def apply_prefix(d, command='all') :
 def get_all_programs() :
     return ['sff2fastq', 'pagan', 'raxml', 'bppphysamp', 'exonerate', 'uchime', 'blastn', 'PyroDist', 'FCluster', 'PyroNoise']
 
-def test_system(command=None, exit_on_failure=False) :
+def test_system(command=None, exit_on_failure=False, output=False) :
     binaries = { 
         'preprocess' : {
             '*'         : ['sff2fastq'],
@@ -124,6 +136,12 @@ def test_system(command=None, exit_on_failure=False) :
             '*'         : ['pagan'],
             'label'     : ['blastn']
         },
+        'label' : {
+            '*'         : ['blastn']
+        },
+        'summary' : {},
+        'showcounts' : {},
+        'showlabels' : {},
         'phylogeny' : {
             '*'         : ['pagan', 'exonerate', 'bppphysamp'],
             'denovo'    : ['raxml']
@@ -133,36 +151,44 @@ def test_system(command=None, exit_on_failure=False) :
         'test' : {}
     }
 
+    def print_out(s) :
+        if output :
+            print s
+        else :
+            if 'not found' in s :
+                print >> stderr, s.lstrip()
+
     fail = False
 
     for b in [command] if command else binaries :
         if binaries[b] :
-            print "checking system for %s command dependancies :" % bold(b)
+            print_out("checking system for %s command dependancies :" % bold(b))
             for o in binaries[b] :
                 for p in binaries[b][o] :
                     installed = System.is_installed(p)
-                    print "    %s %s%s" % (p, "" if o == "*" else "(needed for --%s) " % o, bold_green("found.") if installed else bold_red("not found!"))
+                    print_out("    %s %s%s" % (p, "" if o == "*" else "(needed for --%s) " % o, 
+                        bold_green("found.") if installed else bold_red("not found!")))
                     
                     if not installed :
                         fail = True    
-            print ""
+            print_out("")
 
     # for some reason using pip to install cairo always fails
     # so check for it here instead
-    print "checking for python modules :"
-    try :
-        import cairo
-        print "    pycairo (needed by 'heatmap' command) " + bold_green("found.")
-    except ImportError :
-        print "    pycairo (needed by 'heatmap' command) " + bold_red("not found!")
-        fail = True
-    print ""
+#    print "checking for python modules :"
+#    try :
+#        import cairo
+#        print "    pycairo (needed by 'heatmap' command) " + bold_green("found.")
+#    except ImportError :
+#        print "    pycairo (needed by 'heatmap' command) " + bold_red("not found!")
+#        fail = True
+#    print ""
 
     if exit_on_failure and fail :
         exit(1)
 
 def get_commands() :
-    return ['test', 'preprocess', 'cluster', 'phylogeny', 'heatmap', 'wasabi']
+    return ['test', 'preprocess', 'summary', 'cluster', 'label', 'showcounts', 'showlabels', 'phylogeny', 'heatmap', 'wasabi']
 
 def bold_green(s) :
     return "\033[32m%s\033[0m" % s
@@ -190,7 +216,7 @@ def list_sentence(l) :
 def usage(command='all') :
     global __program__
 
-    options = get_default_options(True)
+    options = get_default_options('all', True)
     outdir = options['outdir']
 
     print >> stderr, """Usage: %s <command> [OPTIONS] <sff files>
@@ -250,7 +276,7 @@ Legal commands are %s (see below for options).
         
         -t REAL         --similarity=REAL       (default = %s)
         
-                        --labels=X              (default = taxonomy, options= (none, blast, taxonomy))
+                        --labels=X              (default = none, options = (none, blast, taxonomy))
                         --mergeclusters         (default = %s)
                         --nohomopolymer         (default = %s)\n""" % \
                (options['metadata'],
@@ -261,10 +287,20 @@ Legal commands are %s (see below for options).
                 str(options['merge-blast-hits']),
                 str(options['no-homopolymer-correction']))
 
+    if command in ('label', 'all') :
+        print >> stderr, """    Label options:
+                        --missing               (only fetch missing labels)
+                        --labels=X              (default = taxonomy, options = (none, blast, taxonomy))\n"""
+
+    if command in ('showcounts', 'all') :
+        print >> stderr, """    Count options:
+                        --delimiter=STR         (default = '\\t')\n"""
+
     if command in ('phylogeny','all') :
         print >> stderr, """    Phylogeny options:
                         --refalignment=FILE     (expects fasta)
                         --reftree=FILE          (expects newick)
+                        --denovo                (don't perform phylogenetic placement, just use RaXML)
                         --clusters=FILE         (default = %s)\n""" % \
                (options['cluster-fasta'])
 
@@ -277,6 +313,7 @@ Legal commands are %s (see below for options).
                         --outtree=FILE          (output tree used in separate newick file)
                         --fliptree              (flip tree upside down)
                         --labelclip=X           (comma separated values, e.g.: nematoda,arthropoda)
+                        --labeltokens=NUM       (need last NUM tokens in taxonomical labelling)
                         --scale=FLOAT           (set length of tree scale, default = %.2f)
                         --height=INT            (set height of tree in heatmap blocks, default = %d)
                         --output=FILE           (default = %s)\n""" % \
@@ -338,7 +375,7 @@ def expect_iupac(parameter, argument) :
     return tmp
 
 def parse_args(command, args) :
-    options = get_default_options()
+    options = get_default_options(command)
 
     try :
         opts,args = getopt.getopt(
@@ -385,7 +422,11 @@ def parse_args(command, args) :
                             "fliptree",
                             "treescale=",
                             "treeheight=",
-                            "labelclip="
+                            "labelclip=",
+                            "labeltokens=",
+                            "denovo",
+                            "delimiter=",
+                            "missing"
                         ]
                     )
 
@@ -423,7 +464,7 @@ def parse_args(command, args) :
         elif o in ('-e', '--miderrors') :
             options['miderrors'] = expect_int("miderrors", a)
 
-        elif o in ('-g', '--mid-length') :
+        elif o in ('-g', '--midlength') :
             options['midlength'] = expect_int("midlength", a)
 
         elif o in ('-l', '--length') :
@@ -534,6 +575,21 @@ def parse_args(command, args) :
         elif o in ('--labelclip',) :
             options['heatmap-label-clip'] = [ i.lower() for i in a.split(',') ]
 
+        elif o in ('--labeltokens',) :
+            options['heatmap-label-tokens'] = expect_int("labeltokens", a)
+        
+        elif o in ('--denovo',) :
+            options['denovo-tree'] = True
+    
+        elif o in ('--delimiter',) :
+            if not a :
+                options['delimiter'] = " "
+            else :
+                options['delimiter'] = a 
+
+        elif o in ('--missing',) :
+            options['label-missing'] = True
+
         else :
             assert False, "unhandled option %s" % o
 
@@ -542,7 +598,7 @@ def parse_args(command, args) :
 
     return options
 
-def check_options(command, options) :
+def check_options(command, options, log) :
     system = System()
 
     apply_prefix(options, command)
@@ -567,21 +623,53 @@ def check_options(command, options) :
 
         for i in ('duplicate-threshold', 'total-duplicate-threshold', 'sample-threshold') :
             if options[i] <= 0 :
-                print >> stderr, "Error: %s must be > 0 (read %d)" % (i, options[i])
+                log.error("%s must be > 0 (read %d)" % (i, options[i]))
                 exit(1)
 
         # i think pagan's sensitivity limit is ~80%
         if options['otu-similarity'] < 0.8 or options['otu-similarity'] > 1.0 :
-            print >> stderr, "Error: similarity must be between 0.8 and 1.0 (read %.2f)" % options['otu-similarity']
+            log.error("similarity must be between 0.8 and 1.0 (read %.2f)" % options['otu-similarity'])
+            exit(1)
+
+    elif command == 'summary' :
+        if not system.check_file(options['summary-file']) :
+            log.error("could not find %s, did you run the 'preprocess' command yet?" % options['summary-file'])
+            exit(1)
+
+    elif command == 'label' :
+        fasta_check = system.check_file(options['cluster-fasta'])
+        biom_check  = system.check_file(options['cluster-biom'])
+
+        def filename_or() :
+            if fasta_check ^ biom_check :
+                return "'%s'" % (options['cluster-fasta'] if not fasta_check else options['cluster-biom'])
+            else :
+                return "'%s' or '%s'" % (options['cluster-fasta'], options['cluster-biom'])
+
+        if not fasta_check or not biom_check :
+            log.error("could not find %s, did you run the 'cluster' command yet?" % filename_or())
+            exit(1)
+
+        if not options['label-centroids'] :
+            log.error("you must specify a labelling method")
+            exit(1)
+
+    elif command == 'showcounts' or command == 'showlabels' :
+        if not system.check_file(options['cluster-biom']) :
+            log.error("could not find '%s', did you run the 'cluster' command yet?" % options['cluster-biom'])
             exit(1)
 
     elif command == 'phylogeny' :
         if not system.check_file(options['cluster-fasta']) :
             exit(1)
 
-        if options['silva-fasta'] :
-            if not system.check_files([options['silva-fasta'], options['silva-tree']]) :
+        if not options['denovo-tree'] :
+            if not options['silva-fasta'] or not options['silva-tree'] :
+                log.error("you must either specify the location of the reference alignment and phylogeny or else use the --denovo option")
                 exit(1)
+            else :
+                if not system.check_files([options['silva-fasta'], options['silva-tree']]) :
+                    exit(1)
 
     elif command == 'heatmap' :
         if not system.check_files([options['cluster-biom']]) :
@@ -589,7 +677,7 @@ def check_options(command, options) :
 
     elif command == 'wasabi' :
         if not options['wasabi-user'] :
-            print >> stderr, "Error: you must specify your wasabi username!\n"
+            log.error("you must specify your wasabi username!")
             exit(1)
 
         if not system.check_files([options['phylogeny-xml']]) :
@@ -607,12 +695,12 @@ def main() :
         return 1
 
     if command == 'test' :
-        test_system()
+        test_system(output=True)
         return 0
 
     options = parse_args(command, argv[2:])
-    setup_logging(options['verbose'])
-    check_options(command, options)
+    log = setup_logging(options['verbose'])
+    check_options(command, options, log)
 
     test_system(command, exit_on_failure=True)
     System.tempdir(options['outdir']) # some objects need this set
@@ -621,10 +709,22 @@ def main() :
 
     if command == 'preprocess' :
         return wf.preprocess()
-    
+ 
+    elif command == 'summary' :
+        return wf.summary()
+
     elif command == 'cluster' :
         return wf.cluster()
-    
+
+    elif command == 'label' :
+        return wf.label()
+
+    elif command == 'showcounts' :
+        return wf.showcounts()
+
+    elif command == 'showlabels' :
+        return wf.showlabels()
+
     elif command == 'phylogeny' :
         return wf.phylogeny()
     
@@ -633,6 +733,9 @@ def main() :
 
     elif command == 'wasabi' :
         return wf.wasabi()
+
+    else :
+        print >> stderr, "'%s' appears to be partially implemented!" % command
 
     return 1
 

@@ -3,9 +3,10 @@ import os
 import collections
 import logging
 import operator
+import json
 
 from sys import exit
-from os.path import splitext,join,basename,exists
+from os.path import splitext, join, basename, exists
 from glob import glob
 
 from seance.sample import Sample, MetadataSample
@@ -19,6 +20,7 @@ from seance.cluster import Cluster
 from seance.biom import BiomFile
 from seance.heatmap import heatmap as phylogenetic_heatmap
 from seance.wasabi import wasabi as view_in_wasabi
+from seance.system import System
 
 
 class WorkFlow(object) :
@@ -120,8 +122,10 @@ class WorkFlow(object) :
 
         self.seqdb = SequenceDB(preprocessed=False)
 
-        p = Progress("Preprocessing", len(self.options['input-files']), self.options['verbose'])
+        p = Progress("Preprocessing", len(self.options['input-files']))
         p.start()
+
+        samples = []
 
         for f in self.__get_files(self.options['input-files']) :
             mid = self.__mid_fastq(f)
@@ -131,11 +135,28 @@ class WorkFlow(object) :
                         self.seqdb, 
                         self.__filters(mid),
                         chimeras=self.options['chimeras'])
-            
+
             sample.print_sample()
+            samples.append(sample)
+
             p.increment()
 
         p.end()
+
+        rejected_reads = sum([ sum(s.filters.counts) for s in samples ])
+        accepted_reads = sum([ len(s) for s in samples ])
+        unique_seq = sum([ len(s.seqcounts) for s in samples ])
+
+        print "processed %s reads, accepted %d (of which %d are unique)" % \
+                (rejected_reads + accepted_reads, accepted_reads, unique_seq)
+
+        self.__write_summary(samples)
+
+
+        if self.options['verbose'] :
+            self.summary()
+
+        return 0
 
     def __preprocessed_samples(self) :
         if self.options['metadata'] is None :
@@ -260,11 +281,11 @@ class WorkFlow(object) :
         # get some info
 #        num_reads = sum([ self.seqdb.get(i).duplicates for i in input_keys ])
         num_reads = sum([ self.seqdb.get(i).duplicates for i in input_keys.keys() ])
-        print "clustering %d/%d (%.2f%%) sequences (%d/%d (%.2f%%) reads)" % \
+        self.log.info("clustering %d/%d (%.2f%%) sequences (%d/%d (%.2f%%) reads)" % \
                         (len(input_keys), self.seqdb.num_sequences(), \
                         len(input_keys) * 100 / float(self.seqdb.num_sequences()), \
                         num_reads, self.seqdb.num_reads(), \
-                        num_reads * 100 / float(self.seqdb.num_reads()))
+                        num_reads * 100 / float(self.seqdb.num_reads())))
 
         # clustering
         c = Cluster(self.seqdb, self.options['otu-similarity'], self.options['verbose'])
@@ -274,8 +295,6 @@ class WorkFlow(object) :
                            singletons=singleton_keys,
                            sample_threshold=self.options['sample-threshold'])
 
-        print "created %d clusters" % len(c)
-
         # output centroids to file
         # output biom file
         # run blast if necessary
@@ -283,19 +302,58 @@ class WorkFlow(object) :
         biom_fname = self.options['cluster-biom']
         otu_names = {}
 
-        # blast to get better names
-        if self.options['label-centroids'] :
-            self.log.info("getting OTU names...")
-            otu_names = BlastN().get_names(self.__fasta(centroid_fname, c.centroids()), self.options['label-centroids'])
-
-            if self.options['merge-blast-hits'] :
-                self.log.info("merging clusters based on labels")
-                c.merge(otu_names)
-
-
+        # write everything out anyway in case labelling fails or is killed
         self.__fasta(centroid_fname, c.centroids(), names=otu_names)
         self.__biom(biom_fname, samples, c, otu_names)
+
+        # blast to get better names
+        if self.options['label-centroids'] :
+            print "getting OTU names (this may take a while)..."
+            otu_names = BlastN(self.options['verbose']).get_names(centroid_fname, self.options['label-centroids'])
+
+            if self.options['label-centroids'] == 'blast' and self.options['merge-blast-hits'] :
+                c.merge(otu_names)
+
+            # write out results files
+            self.__fasta(centroid_fname, c.centroids(), names=otu_names)
+            self.__biom(biom_fname, samples, c, otu_names)
         
+        return 0
+
+    def label(self) :
+        self.seqdb = self.__read_fasta(self.options['cluster-fasta'])
+        blast_fname = self.options['cluster-fasta']
+
+        # if we are only going to label the clusters without labels
+        # then we need to find the names of those clusters and write a 
+        # fasta file containing only those sequences
+        if self.options['label-missing'] :
+            tmp = []
+            biom = json.load(open(self.options['cluster-biom']))
+            for r in biom['rows'] :
+                if r['metadata']['label'] in ("", "unknown", "error") :
+                    tmp.append(r['id'])
+
+            if len(tmp) == 0 :
+                self.log.error("there are no missing labels")
+                exit(1)
+
+            self.log.info("%d clusters missing labels" % len(tmp))
+            blast_fname = self.__fasta(join(self.options['outdir'], 'missing.fasta'), tmp)
+
+
+        print "getting OTU names (this may take a while)..."
+        otu_names = BlastN(self.options['verbose']).get_names(blast_fname, self.options['label-centroids'])
+
+        # rework the biom
+        biom = BiomFile()
+        biom.change_otu_names(self.options['cluster-biom'], otu_names)
+        self.log.info("written %s" % self.options['cluster-biom'])
+
+        # get the rest of the names and rewrite fasta
+        otu_names = biom.get_label_mapping(self.options['cluster-biom'])
+        self.__fasta(self.options['cluster-fasta'], self.seqdb.keys(), names=otu_names)
+
         return 0
 
     def __fasta(self, filename, keys, names=None) :
@@ -307,13 +365,40 @@ class WorkFlow(object) :
         else :
             for key in keys :
                 s = self.seqdb.get(key)
-                print >> f, ">seance%s %s" % (str(key), names.get(key, "unknown"))
+
+                if isinstance(key, int) :
+                    str_key = "seance%d" % key
+                else :
+                    str_key = str(key)
+
+                print >> f, ">%s %s" % (str_key, names.get(key, "unknown"))
                 print >> f, s.sequence
 
         f.close()
         self.log.info("written %s" % filename)
 
         return filename
+
+    def __read_fasta(self, filename, only_include=None) :
+        tmp = {}
+
+        f = FastqFile(filename)
+        f.open()
+
+        for seq in f :
+            seq.id = seq.id.split()[0][1:]
+
+            if only_include :
+                if seq.id not in only_include :
+                    continue
+    
+            tmp[seq.id] = seq
+
+        f.close()
+
+        self.log.info("read %d centroid sequences" % len(tmp))
+
+        return tmp
 
     def __biom(self, filename, samples, clustering, cluster_names) :
         centroids = clustering.centroids()
@@ -323,8 +408,8 @@ class WorkFlow(object) :
         output_samples = [ s for s in samples if s.contains(all_keys) ]
         output_otus = [ ("seance%s" % str(k), cluster_names.get(k, "unknown")) for k in centroids ]
 
-        self.log.info("%d / %d samples have at least one sequence used in clustering" % \
-                (len(output_samples), len(samples)))
+        #self.log.info("%d / %d samples have at least one sequence used in clustering" % \
+        #        (len(output_samples), len(samples)))
 
         b = BiomFile()
         b.set_samples(output_samples)
@@ -397,9 +482,10 @@ class WorkFlow(object) :
                              flip_tree=self.options['heatmap-flip-tree'],
                              scale=self.options['heatmap-scale'],
                              tree_height_blocks=self.options['heatmap-tree-height'],
-                             label_clips=self.options['heatmap-label-clip'])
+                             label_clips=self.options['heatmap-label-clip'],
+                             label_tokens=self.options['heatmap-label-tokens'])
 
-        print "wrote %s" % self.options['heatmap-pdf']
+        self.log.info("wrote %s" % self.options['heatmap-pdf'])
         return 0
 
     def wasabi(self) :
@@ -407,4 +493,95 @@ class WorkFlow(object) :
                               basename(self.options['outdir']), 
                               self.options['wasabi-url'],
                               self.options['wasabi-user'])
+
+    def __write_summary(self, samples) :
+        data = collections.defaultdict(dict)
+        fields = [ i[0] for i in samples[0].filters.filter_counts() ] + ['Accepted', 'Unique']
+
+        for s in samples :
+            filename = s.fastq.get_filename()
+            filename = basename(filename[:filename.rfind(".")])
+
+            for name,count in s.filters.filter_counts() :
+                data[filename][name] = count
+
+            data[filename]['Accepted'] = len(s)
+            data[filename]['Unique'] = len(s.seqcounts)
+
+        with open(self.options['summary-file'], 'w') as f :
+            print >> f, ','.join(['Filename'] + [ i.replace("Filter", "") for i in fields ])
+            for fn in data :
+                print >> f, ','.join([fn] + [ str(data[fn][field]) for field in fields ])
+        
+            self.log.info("created %s" % f.name)
+
+    def summary(self) :
+        header_constant = 4
+
+        with open(self.options['summary-file']) as f :
+            max_length = max([ len(line.split(',')[0]) for line in f ])
+
+        with open(self.options['summary-file']) as f :
+            header = f.readline().rstrip().split(',')
+            field_lengths = [ len(i) + header_constant for i in header ]
+            fmt_str = "%s"
+
+            for i in field_lengths[1:] :
+                fmt_str += ("%%%ds" % i)
+            
+            x = max_length - len("filename")
+            print (" " * x) + (fmt_str % tuple(header))
+            print ""
+
+            for line in f :
+                tmp = line.rstrip().split(',')
+                x = max_length - len(tmp[0])
+                print (" " * x) + (fmt_str % tuple(tmp))
+            
+            print ""
+
+        return 0
+
+    def showcounts(self) :
+        def get_ids(biom_obj, element) :
+            return [ i['id'].encode('ascii', 'ignore') for i in biom_obj[element] ]
+
+        delim = self.options['delimiter']
+        
+        # read in
+        biom = json.load(open(self.options['cluster-biom']))
+        rows = get_ids(biom, 'rows')
+        cols = get_ids(biom, 'columns')
+
+        data = dict([ ((int(r),int(c)),int(q)) for r,c,q in biom['data']])
+
+        # output
+        print delim.join([""] + cols)
+
+        for r_index,r_id in enumerate(rows) :
+            tmp = [r_id]
+
+            for c_index,c_id in enumerate(cols) :
+                tmp.append(data.get((r_index,c_index), 0))
+
+            print delim.join([str(i) for i in tmp])
+
+        return 0
+
+    def showlabels(self) :
+        delim = self.options['delimiter']
+        
+        #biom = json.load(open(self.options['cluster-biom']))
+        #
+        #for r in biom['rows'] :
+        #    print delim.join([r['id'], r['metadata']['label']])
+
+        biom = BiomFile()
+        labels = biom.get_label_mapping(self.options['cluster-biom'])
+
+        for x in labels.iteritems() :
+            print delim.join(x)
+
+        return 0
+
 

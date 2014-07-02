@@ -59,7 +59,7 @@ class Sample(object) :
 
         self.fastq.close()
 
-        self.log.info("filter results\n" + str(self.filters))
+        #self.log.info("filter results\n" + str(self.filters))
         self.log.info("accepted %d sequences" % (sum(self.seqcounts.values())))
 
     def __raw_load(self) :

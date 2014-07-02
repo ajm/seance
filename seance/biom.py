@@ -74,5 +74,27 @@ class BiomFile(object) :
             tmp["data"].append(i)
 
 
-        print >> f, json.dumps(tmp, sort_keys=True, indent=2, separators=(',',": "))
+        print >> f, json.dumps(tmp, sort_keys=True, indent=2, separators=(",",": "))
+
+    def change_otu_names(self, filename, names) :
+        tmp = json.load(open(filename))
+
+        # iterate through and alter any in 'names'
+        for r in tmp['rows'] :
+            if r['id'] in names :
+                r['metadata']['label'] = names[r['id']]
+
+        # rewrite the file
+        f = open(filename, 'w')
+        print >> f, json.dumps(tmp, sort_keys=True, indent=2, separators=(",",": "))
+        f.close()
+
+    def get_label_mapping(self, filename) :
+        data = json.load(open(filename))
+        tmp = {}
+
+        for r in data['rows'] :
+            tmp[r['id']] = r['metadata']['label']
+
+        return tmp
 

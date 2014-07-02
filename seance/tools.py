@@ -13,6 +13,8 @@ import socket
 from os.path import abspath, join, dirname
 from seance.filetypes import SffFile, FastqFile
 from seance.datatypes import IUPAC
+from seance.progress import Progress
+
 
 class ExternalProgramError(Exception) :
     pass
@@ -46,11 +48,12 @@ class ExternalProgram(object) :
         
         return None
     
-    def system(self, command) :
-        self.log.debug(command)
+    def system(self, command, debug=True) :
+        if debug :
+            self.log.debug(command)
         retcode = os.system(command) 
         if retcode != 0 :
-            raise ExternalProgramError("'%s' return code %d" % (command, retcode))
+            raise ExternalProgramError("'%s' return code %d" % (' '.join(command.split()), retcode))
 
 class Sff2Fastq(ExternalProgram) :
     def __init__(self) :
@@ -74,35 +77,6 @@ class Sff2Fastq(ExternalProgram) :
         
         return FastqFile(fastq_fname)
 
-class GetMID(object) :
-    def __init__(self, length) :
-        self.length = length
-        self.command = "grep -B1 \"^+\" %s | grep -v \"^[+-]\" | awk '{ print substr($0, 0, " + str(self.length) + ") }' | sort | uniq -c | sort -g | tail -1 | awk '{ print $2 }'"
-        self.log = logging.getLogger('seance')
-
-    def run(self, fastq_name) :
-        status,output = commands.getstatusoutput(self.command % fastq_name)
-
-        if status != 0 :
-            raise ExternalProgramError("%s: %s", type(self).__name__, output)
-
-        output = output.strip()
-
-        # if the file is empty, there is nothing to read, so
-        # returning an empty string will not matter...
-        if output == '':
-            self.log.info("mid empty")
-            return output
-
-        if re.match("[GATC]{%d}" % self.length, output) == None :
-            self.log.error("%s does not look like a MID" % (output))
-            sys.exit(1)
-            #raise ExternalProgramError("%s: %s does not look like a MID" % (type(self).__name__, output))
-
-        self.log.info("mid = %s" % output)
-
-        return output
-
 class GetMID2(object) :
     def __init__(self, length) :
         self.length = length
@@ -121,7 +95,12 @@ class GetMID2(object) :
             return ""
 
         mid,midcount = count.most_common()[0]
-        self.log.info("mid = %s" % mid)
+        self.log.debug("mid = %s (%s)" % (mid, fastq.get_filename()))
+
+        if re.match("[GATC]{%d}" % self.length, mid) == None :
+            self.log.error("%s does not look like a MID" % (mid))
+            sys.exit(1)
+
         return mid
 
 class Pagan(ExternalProgram) :
@@ -133,7 +112,7 @@ class Pagan(ExternalProgram) :
         out_fname = fasta_fname + ".out"
 
         try :
-            self.system(command % (fasta_fname, out_fname))
+            self.system(command % (fasta_fname, out_fname), debug=False)
 
         except ExternalProgramError, epe :
             self.log.error(str(epe))
@@ -147,7 +126,7 @@ class Pagan(ExternalProgram) :
         out_fname = fasta_fname + ".out"
 
         try :
-            self.system(command % (fasta_fname, out_fname))
+            self.system(command % (fasta_fname, out_fname), debug=False)
 
         except ExternalProgramError, epe :
             self.log.error(str(epe))
@@ -225,79 +204,6 @@ class Pagan(ExternalProgram) :
 
         return out_fname + ".pruned_closest.fas", out_fname + ".pruned_closest.tre", out_fname + ".pruned_closest.xml"
 
-class Aligner1D(object) :
-    def __init__(self) :
-        self.__reset()
-
-    def __reset(self) :
-        self.sequences = []
-        self.charfreqs = []
-        self.maxlens = {}
-
-    def __test_max(self, pos, freq) :
-        try :
-            if self.maxlens[pos] < freq :
-                self.maxlens[pos] = freq
-
-        except KeyError, ke :
-            self.maxlens[pos] = freq
-
-    def __convert(self, seq) :
-        tmp = []
-
-        char = seq[0]
-        freq = 1
-
-        for i in seq[1:] :
-            if i == char :
-                freq += 1
-            else :
-                self.__test_max(len(tmp), freq)
-                tmp.append((char, freq))
-
-                char = i
-                freq = 1
-
-        self.__test_max(len(tmp), freq)
-        tmp.append((char, freq))
-
-        return tmp
-
-    def get_alignment(self, fname) :
-        self.__reset()
-
-        fq = FastqFile(fname)
-
-        fq.open()
-
-        for seq in fq :
-            self.sequences.append(seq)
-            self.charfreqs.append(self.__convert(seq))
-
-        fq.close()
-
-        s = ""
-        for i in range(len(self.charfreqs)) :
-            s += (">seq%s\n" % self.sequences[i].id)
-            tmp = self.charfreqs[i]
-            for pos in range(len(self.maxlens)) :
-                try :
-                    char,freq = tmp[pos]
-                except IndexError, ie :
-                    char,freq = 'X', 0    
-
-                s += ((char * freq) + ('-' * (self.maxlens[pos] - freq)))
-            s += "\n"
-
-        # write out again to file to keep same API
-        # TODO: streamline, this is mostly for testing so I don't need to
-        # change anything else
-        outf = open(fname + ".out", 'w')
-        print >> outf, s
-        outf.close()
-
-        return FastqFile(outf.name)
-
 class Uchime(ExternalProgram) :
     def __init__(self) :
         super(Uchime, self).__init__('uchime')
@@ -338,18 +244,21 @@ class Uchime(ExternalProgram) :
         return self.__parse(out_fname)
 
 class BlastN(ExternalProgram) :
-    def __init__(self) :
+    def __init__(self, verbose) :
         super(BlastN, self).__init__('blastn')
-        #self.command = "blastn -query %s -db nr -remote -num_alignments 10 -outfmt 10"
-        self.command = "blastn -query %s -db nr -remote -task megablast -outfmt 10"
+        self.command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -entrez_query 'all[filter] NOT enviromnental sample[filter] NOT metagenomes[orgn] NOT uncultured eukaryote[orgn]'"
         self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=xml"
         self.regex = {  "blast"     : "Org\-ref_taxname",
                         "taxonomy"  : "OrgName_lineage" }
+        self.verbose = verbose
 
     def __merge_taxonomy(self, names) :
         tmp = collections.defaultdict(list)
         for name in names :
             for i,v in enumerate(name.split(';')) :
+                if v == 'error' :
+                    return v
+
                 tmp[i].append(v)
         
         s = ""
@@ -360,13 +269,38 @@ class BlastN(ExternalProgram) :
                 break
                 #s += (";{%s}" % ','.join(sorted(tmp[i])))
         
+        if len(s) == 0 :
+            return "cannot label (matches multiple domains!)"
+
         return s[1:]
 
-    def __get_desc_common(self, names, method) :
-        return self.__merge_taxonomy([ self.__get_desc(i[0], method) for i in names ])
+    def __get_desc_common(self, names, method, progress) :
+        #return self.__merge_taxonomy([ self.__get_desc(i[0], method) for i in names ])
+
+        tmp = []
+
+        for i in names :
+            tmp.append( self.__get_desc_wrapper(i[0], method, 10) )
+            progress.increment()
+
+        return self.__merge_taxonomy(tmp)
 
     def __get_desc_concat(self, names, method) :
         return ','.join([ self.__get_desc(i[0], method) for i in names ])
+
+    def __get_desc_wrapper(self, name, method, max_attempts, return_on_failure='error') :
+        attempts = 0
+
+        while True :
+            try :
+                return self.__get_desc(name, method)
+            except :
+                attempts += 1
+                
+            if attempts == max_attempts :
+                print "" # there is a progress bar
+                self.log.error("tried to query '%s' using NCBI eutils (exceeded %d attempts)" % (name, max_attempts))
+                return return_on_failure
 
     def __get_desc(self, name, method) :
         try :
@@ -382,27 +316,29 @@ class BlastN(ExternalProgram) :
             f.close()
 
             if tmp is None :
-                print >> sys.stderr, "Error with", name
+                self.log.error("Error calling NCBI eutils with '%s'" % name)
                 tmp = "none"
 
             if method == 'taxonomy' :
                 tmp = tmp.replace(" ", "")
-
+            
+            #self.log.info(tmp)
             return tmp
 
         except urllib2.HTTPError, he :
-            self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
-            return self.__get_desc(name, method)
+            self.log.debug("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
+            raise he
 
         except urllib2.URLError, ue :
-            self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(ue)))
-            return self.__get_desc(name, method)
+            self.log.debug("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(ue)))
+            raise ue
 
         except socket.timeout, to :
-            self.log.warn("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(to)))
-            return self.__get_desc(name, method)
+            self.log.debug("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(to)))
+            raise to
 
     def get_names(self, fasta_fname, method) :
+        #self.log.info("getting OTU names (this may take a while)...")
 
         if method not in self.regex.keys() :
             self.log.error("'%s' is not a valid labelling method" % method)
@@ -421,20 +357,24 @@ class BlastN(ExternalProgram) :
             fields = line.split(',')
             try :
                 name = int(fields[0])
+
+            except ValueError :
+                name = fields[0]
+
+            try :
                 score = float(fields[-1])
-
-                if name not in scores :
-                    scores[name] = score
-
-                # only keep the highest scoring hits
-                if scores[name] != score :
-                    continue
 
             except ValueError, ve :
                 self.log.warn("problem with blast result (%s), skipping..." % (str(ve)))
-                print line
+                self.log.debug(line)
                 continue
 
+            if name not in scores :
+                scores[name] = score
+
+            # only keep the highest scoring hits
+            if scores[name] != score :
+                continue
 
             try :
                 desc = fields[1].split('|')
@@ -447,15 +387,21 @@ class BlastN(ExternalProgram) :
                 self.log.warn("could not split line from blastn: %s" % str(fields))
                 continue
 
+        p = Progress("OTU naming (%s)" % method, sum([len(i) for i in names.values()]) if method == 'taxonomy' else len(names))
+        p.start()
+
         # now generate labels
         if method == 'blast' :
             for name in names :
                 tmp = names[name][0]
-                names[name] = "%s_%s" % (self.__get_desc(tmp[0], method), tmp[1])
+                names[name] = "%s_%s" % (self.__get_desc_wrapper(tmp[0], method, 10), tmp[1])
+                p.increment()
                 #names[name] = "%s_%s" % (self.__get_desc_concat(names[name], method), tmp[1])
         elif method == 'taxonomy' :
             for name in names :
-                names[name] = "%s" % (self.__get_desc_common(names[name], method))
+                names[name] = "%s" % (self.__get_desc_common(names[name], method, p))
+
+        p.end()
 
         return names
 

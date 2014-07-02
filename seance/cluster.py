@@ -32,6 +32,8 @@ class Cluster(object) :
         return [ c[0] for c in self.clusters ]
     
     def merge(self, names) :
+        self.log.info("merging clusters based on labels")
+        
         tmp = {} # cluster --> species
 
         for k,v in names.iteritems() :
@@ -185,7 +187,7 @@ class Cluster(object) :
         for key in keys :
             seqcount[key] = self.db.get(key).duplicates
 
-        p = Progress("Clustering", len(seqcount), self.verbose)
+        p = Progress("Clustering", len(seqcount))
         p.start()
 
         for key,freq in seqcount.most_common() :
@@ -229,8 +231,12 @@ class Cluster(object) :
             if add_cluster or (len(tmp) >= sample_threshold) :
                 new_clusters.append(c)
 
-        print "removed %d clusters due to sample_threshold" % (len(self.clusters) - len(new_clusters))
+        self.log.info("removed %d clusters due to sample threshold" % (len(self.clusters) - len(new_clusters)))
+        self.log.info("created %d clusters" % len(new_clusters))
+
+        # i think we always want to see this
+        print "removed %d clusters due to sample threshold" % (len(self.clusters) - len(new_clusters))
+        print "created %d clusters" % len(new_clusters)
 
         self.clusters = new_clusters
-        self.log.info("number of clusters = %d" % len(self.clusters))
 

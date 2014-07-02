@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(name='Seance',
       version='0.1',
-      description='Evolutionary Analysis and Visualisation of Metagenomic Datasets',
+      description='Reference-based phylogenetic analysis of 18S rRNA studies',
       author='Alan Medlar',
       author_email='alan.j.medlar@helsinki.fi',
       url='',
@@ -12,7 +12,8 @@ setup(name='Seance',
       packages=['seance'],
       install_requires=[
           'biopython >= 1.6', 
-          'dendropy >= 3.12'
+          'dendropy >= 3.12',
+          'cairocffi >= 0.5.4'
           ],
       scripts=['scripts/seance'],
      )

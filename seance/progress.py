@@ -2,16 +2,14 @@ import sys
 import datetime
 
 class Progress(object) :
-    def __init__(self, title, total, silent) :
+    def __init__(self, title, total) :
         self.title = title
         self.total = float(total)
         self.current = 0
         self.start_time = None
-        self.silent = silent
 
     def print_out(self) :
-        if not self.silent :
-            print >> sys.stderr, "\r[%s] %d / %d " % (self.title, self.current, self.total),
+        print >> sys.stderr, "\r[%s] %d / %d " % (self.title, self.current, self.total),
 
     def percent(self) :
         return self.current / self.total
@@ -26,9 +24,9 @@ class Progress(object) :
 
     def start(self) :
         self.start_time = datetime.datetime.now()
+        print >> sys.stderr, ""
         self.print_out()
 
     def end(self) :
-        if not self.silent :
-            print >> sys.stderr, "\r[%s] finished in %s" % (self.title, self.time())
+        print >> sys.stderr, "\r[%s] finished in %s\n" % (self.title, self.time())
 
