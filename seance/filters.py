@@ -46,7 +46,7 @@ class MultiFilter(Filter) :
         return len(self.filters)
 
     def filter_counts(self) :
-        return [(f.__class__.__name__ , self.counts[i]) for i,f in enumerate(self.filters)]
+        return [(str(f), self.counts[i]) for i,f in enumerate(self.filters)]
 
     def __str__(self) :
         s = ""
@@ -72,12 +72,18 @@ class LengthFilter(Filter) :
 
         return False
 
+    def __str__(self) :
+        return "Length(%d)" % self.length
+
 class AmbiguousFilter(Filter) :
     def __init__(self) :
         logging.getLogger('seance').info("created AmbiguousFilter()")
 
     def accept(self, seq) :
         return 'N' not in seq
+
+    def __str__(self) :
+        return "Ambiguous(N)"
 
 class MinimumQualityFilter(Filter) :
     def __init__(self, qual) :
@@ -87,6 +93,9 @@ class MinimumQualityFilter(Filter) :
     def accept(self, seq) :
         return min(seq.qualities) >= self.qual
 
+    def __str__(self) :
+        return "MinimumQuality(%d)" % self.qual
+
 class AverageQualityFilter(Filter) :
     def __init__(self, qual) :
         logging.getLogger('seance').info("created AverageQualityFilter(qual=%d)" % (qual))
@@ -95,6 +104,9 @@ class AverageQualityFilter(Filter) :
     def accept(self, seq) :
         tmp = seq.qualities
         return (sum(tmp) / float(len(tmp))) >= self.qual
+    
+    def __str__(self) :
+        return "AverageQuality(%d)" % self.qual
 
 class WindowedQualityFilter(Filter) :
     def __init__(self, qual, winlen) :
@@ -119,6 +131,9 @@ class WindowedQualityFilter(Filter) :
 
         return True
 
+    def __str__(self) :
+        return "WindowedAvgQuality(%d, %d)" % (self.qual, self.winlen)
+
 class HomopolymerFilter(Filter) :
     def __init__(self, maxlen) :
         logging.getLogger('seance').info("created HomopolymerFilter(maxlen=%d)" % (maxlen))
@@ -140,6 +155,9 @@ class HomopolymerFilter(Filter) :
 
         return True
 
+    def __str__(self) :
+        return "Homopolymer(%d)" % self.maxlen
+
 class MidFilter(Filter) :
     def __init__(self, mid, err) :
         logging.getLogger('seance').info("created MidFilter(mid=%s, err=%d)" % (mid, err))
@@ -153,7 +171,13 @@ class MidFilter(Filter) :
     def accept(self, seq) :
         seqmid = seq.sequence[:self.midlen]
         seq.remove_mid(self.midlen)
+
+        #print self.mid, seqmid, self._hamming(self.mid, seqmid)
+
         return self._hamming(self.mid, seqmid) <= self.err
+
+    def __str__(self) :
+        return "MID(%d)" % self.err
 
 class PrimerFilter(Filter) :
     def __init__(self, primer, err, clip) :
@@ -168,6 +192,8 @@ class PrimerFilter(Filter) :
 
         ret = IUPAC.close_enough(self.primer, seq.sequence, self.err)
 
+        #print self.primer, seq.sequence[:self.len], ret
+
         if ret and self.clip :
             # primer part of sequence may be longer or
             # shorter, but it does not really matter
@@ -176,4 +202,7 @@ class PrimerFilter(Filter) :
             seq.remove_mid(self.len)
             
         return ret
+
+    def __str__(self) :
+        return "Primer(%d)" % self.err
 

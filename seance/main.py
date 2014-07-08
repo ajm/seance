@@ -44,17 +44,18 @@ def get_default_options(command, fillin=False) :
             'clipprimers'       : False,
             'miderrors'         : 0,
             'midlength'         : 5,
+            'primererrors'      : 2,
 
             'length'            : 250, 
             'quality-method'    : 'min', # 'average', 'window', 'none'
-            'quality'           : 25,
-            'windowlength'      : 10,
+            'quality'           : 20,
+            'windowlength'      : 50,
             'removeambiguous'   : True,
             'maxhomopolymer'    : 8,
             'chimeras'          : False,
 
             'total-duplicate-threshold'     : 1,
-            'sample-threshold'              : 2,
+            'sample-threshold'              : 1,
             'duplicate-threshold'           : 2,
             'otu-similarity'                : 0.99,
             'merge-blast-hits'              : False,
@@ -62,7 +63,7 @@ def get_default_options(command, fillin=False) :
 
             'summary-file'      : None,
 
-            'label-centroids'   : 'none',
+            'label-centroids'   : None,
             'label-missing'     : False,
 
             'delimiter'         : '\t',
@@ -96,7 +97,7 @@ def get_default_options(command, fillin=False) :
     if fillin :
         apply_prefix(tmp)
 
-    if command == 'labels' :
+    if command == 'label' :
         tmp['label-centroids'] = 'taxonomy'
 
     return tmp
@@ -238,6 +239,7 @@ Legal commands are %s (see below for options).
         -f SEQ          --forwardprimer=SEQ     (default = %s)
         -r SEQ          --reverseprimer=SEQ     (default = %s)
         -k              --clipprimers           (default = %s)
+                        --primererrors=NUM      (default = %s)
 
         -e NUM          --miderrors=NUM         (default = %s)
         -g NUM          --midlength=NUM         (default = %s)
@@ -255,6 +257,7 @@ Legal commands are %s (see below for options).
                (str(options['forwardprimer']),
                 str(options['reverseprimer']),
                 str(options['clipprimers']),
+                str(options['primererrors']),
                 str(options['miderrors']),
                 str(options['midlength']),
                 str(options['length']),
@@ -426,7 +429,8 @@ def parse_args(command, args) :
                             "labeltokens=",
                             "denovo",
                             "delimiter=",
-                            "missing"
+                            "missing",
+                            "primererrors="
                         ]
                     )
 
@@ -590,6 +594,9 @@ def parse_args(command, args) :
         elif o in ('--missing',) :
             options['label-missing'] = True
 
+        elif o in ('--primererrors',) :
+            options['primererrors'] = expect_int("primererrors", a)
+
         else :
             assert False, "unhandled option %s" % o
 
@@ -612,6 +619,11 @@ def check_options(command, options, log) :
     if command == 'preprocess' :
         if not system.check_files(options['input-files']) :
             exit(1)
+
+        if options['denoise'] :
+            if not options['forwardprimer'] :
+                log.error("for denoising you must specify the forward primer!")
+                exit(1)
 
     elif command == 'cluster' :
         #if options['metadata'] is None :

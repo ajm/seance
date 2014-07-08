@@ -246,7 +246,7 @@ class Uchime(ExternalProgram) :
 class BlastN(ExternalProgram) :
     def __init__(self, verbose) :
         super(BlastN, self).__init__('blastn')
-        self.command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -entrez_query 'all[filter] NOT enviromnental sample[filter] NOT metagenomes[orgn] NOT uncultured eukaryote[orgn]'"
+        self.command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -perc_identity 90 -entrez_query 'all[filter] NOT (environmental samples[organism] OR metagenomes[orgn])'"
         self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=xml"
         self.regex = {  "blast"     : "Org\-ref_taxname",
                         "taxonomy"  : "OrgName_lineage" }
@@ -304,7 +304,7 @@ class BlastN(ExternalProgram) :
 
     def __get_desc(self, name, method) :
         try :
-            f = urllib2.urlopen(self.url % name, None, 1)
+            f = urllib2.urlopen(self.url % name, None, 5)
             tmp = None
 
             for line in f :
@@ -495,7 +495,7 @@ class AmpliconNoise(ExternalProgram) :
                self.close_enough(primer[1:], sequence, diff-1) or \
                self.close_enough(primer, sequence[1:], diff-1)
 
-    def extract(self, sff, outdir, primer, barcode, barcode_errors, max_homopolymer) :
+    def extract(self, sff, outdir, primer, primer_errors, barcode, barcode_errors, max_homopolymer) :
         try :
             from Bio import SeqIO
         except ImportError :
@@ -546,7 +546,7 @@ class AmpliconNoise(ExternalProgram) :
 
             if new_length >= 360 and \
                     IUPAC.close_enough(barcode, barcode_seq, barcode_errors) and \
-                    IUPAC.close_enough(primer, primer_seq, 2) :
+                    IUPAC.close_enough(primer, primer_seq, primer_errors) :
                 flows.append(record.annotations["flow_values"])
                 flowlens.append(new_length)
                 names.append(record.id)

@@ -43,7 +43,7 @@ class WorkFlow(object) :
 
         # check primer, remove if requested
         if self.options['forwardprimer'] is not None :
-            mf.add(PrimerFilter(self.options['forwardprimer'], 2, self.options['clipprimers']))
+            mf.add(PrimerFilter(self.options['forwardprimer'], self.options['primererrors'], self.options['clipprimers']))
 
         if self.options['length'] != None :
             mf.add(LengthFilter(self.options['length']))
@@ -104,6 +104,7 @@ class WorkFlow(object) :
                     yield AmpliconNoise().run(sff,
                             self.options['outdir'],
                             self.options['forwardprimer'],
+                            self.options['primererrors'],
                             self.__mid_sff(sff),
                             self.options['miderrors'], 
                             self.options['maxhomopolymer']
@@ -150,8 +151,8 @@ class WorkFlow(object) :
         print "processed %s reads, accepted %d (of which %d are unique)" % \
                 (rejected_reads + accepted_reads, accepted_reads, unique_seq)
 
-        self.__write_summary(samples)
-
+        if samples :
+            self.__write_summary(samples)
 
         if self.options['verbose'] :
             self.summary()
@@ -371,7 +372,7 @@ class WorkFlow(object) :
                 else :
                     str_key = str(key)
 
-                print >> f, ">%s %s" % (str_key, names.get(key, "unknown"))
+                print >> f, ">%s %s" % (str_key, names.get(str_key, "unknown"))
                 print >> f, s.sequence
 
         f.close()
@@ -406,7 +407,7 @@ class WorkFlow(object) :
 
         output_clusters = clustering.clusters
         output_samples = [ s for s in samples if s.contains(all_keys) ]
-        output_otus = [ ("seance%s" % str(k), cluster_names.get(k, "unknown")) for k in centroids ]
+        output_otus = [ ("seance" + str(k), cluster_names.get("seance" + str(k), "unknown")) for k in centroids ]
 
         #self.log.info("%d / %d samples have at least one sequence used in clustering" % \
         #        (len(output_samples), len(samples)))
@@ -486,6 +487,7 @@ class WorkFlow(object) :
                              label_tokens=self.options['heatmap-label-tokens'])
 
         self.log.info("wrote %s" % self.options['heatmap-pdf'])
+        print "wrote %s" % self.options['heatmap-pdf']
         return 0
 
     def wasabi(self) :
@@ -496,7 +498,7 @@ class WorkFlow(object) :
 
     def __write_summary(self, samples) :
         data = collections.defaultdict(dict)
-        fields = [ i[0] for i in samples[0].filters.filter_counts() ] + ['Accepted', 'Unique']
+        fields = [ i[0] for i in samples[0].filters.filter_counts() ] + ['Chimera', 'Accepted', 'Unique']
 
         for s in samples :
             filename = s.fastq.get_filename()
@@ -505,15 +507,22 @@ class WorkFlow(object) :
             for name,count in s.filters.filter_counts() :
                 data[filename][name] = count
 
+            if self.options['chimeras'] :
+                data[filename]['Chimera'] = sum([ s.seqcounts[i] for i in s.chimeras ])
             data[filename]['Accepted'] = len(s)
-            data[filename]['Unique'] = len(s.seqcounts)
+            data[filename]['Unique'] = len([ i for i in s.seqcounts if i not in s.chimeras ])
 
-        with open(self.options['summary-file'], 'w') as f :
-            print >> f, ','.join(['Filename'] + [ i.replace("Filter", "") for i in fields ])
-            for fn in data :
+        if not exists(self.options['summary-file']) :
+            with open(self.options['summary-file'], 'w') as f :
+                print >> f, ','.join(['Filename'] + [ i.replace("Filter", "") for i in fields ])
+                self.log.info("created %s" % f.name)
+
+        # want to append in case we do multiple preprocess commands
+        with open(self.options['summary-file'], 'a') as f :
+            for fn in sorted(data.keys()) :
                 print >> f, ','.join([fn] + [ str(data[fn][field]) for field in fields ])
         
-            self.log.info("created %s" % f.name)
+            self.log.info("wrote %s" % f.name)
 
     def summary(self) :
         header_constant = 4
@@ -555,11 +564,13 @@ class WorkFlow(object) :
 
         data = dict([ ((int(r),int(c)),int(q)) for r,c,q in biom['data']])
 
+        id2label = dict([ (i['id'], i['metadata']['label']) for i in biom['rows'] ])
+
         # output
         print delim.join([""] + cols)
 
         for r_index,r_id in enumerate(rows) :
-            tmp = [r_id]
+            tmp = [r_id + "_" + id2label[r_id]]
 
             for c_index,c_id in enumerate(cols) :
                 tmp.append(data.get((r_index,c_index), 0))
