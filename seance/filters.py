@@ -132,7 +132,7 @@ class WindowedQualityFilter(Filter) :
         return True
 
     def __str__(self) :
-        return "WindowedAvgQuality(%d, %d)" % (self.qual, self.winlen)
+        return "Windowed(%d)AvgQuality(%d)" % (self.winlen, self.qual)
 
 class HomopolymerFilter(Filter) :
     def __init__(self, maxlen) :

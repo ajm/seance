@@ -42,7 +42,7 @@ def get_default_options(command, fillin=False) :
             'forwardprimer'     : None,
             'reverseprimer'     : None,
             'clipprimers'       : False,
-            'miderrors'         : 0,
+            'miderrors'         : 1,
             'midlength'         : 5,
             'primererrors'      : 2,
 
@@ -63,7 +63,7 @@ def get_default_options(command, fillin=False) :
 
             'summary-file'      : None,
 
-            'label-centroids'   : None,
+            'labels'            : None,
             'label-missing'     : False,
 
             'delimiter'         : '\t',
@@ -76,13 +76,15 @@ def get_default_options(command, fillin=False) :
 
             'silva-fasta'       : None,
             'silva-tree'        : None,
-            'denovo-tree'       : False,
+            'denovo'            : False,
+
+            'subset'            : None,
 
             'heatmap-no-tree'   : False,
             'heatmap-pdf'       : 'seance.pdf',
-            'heatmap-regex'     : None,
             'heatmap-out-tree'  : None,
             'heatmap-flip-tree' : False,
+            'heatmap-ladderise' : False,
             'heatmap-scale'     : 0.05,
             'heatmap-tree-height' : 20,
             'heatmap-label-clip'  : [],
@@ -98,7 +100,7 @@ def get_default_options(command, fillin=False) :
         apply_prefix(tmp)
 
     if command == 'label' :
-        tmp['label-centroids'] = 'taxonomy'
+        tmp['label'] = 'taxonomy'
 
     return tmp
 
@@ -126,7 +128,7 @@ def apply_prefix(d, command='all') :
 def get_all_programs() :
     return ['sff2fastq', 'pagan', 'raxml', 'bppphysamp', 'exonerate', 'uchime', 'blastn', 'PyroDist', 'FCluster', 'PyroNoise']
 
-def test_system(command=None, exit_on_failure=False, output=False) :
+def test_system(command=None, options=None, exit_on_failure=False, output=False) :
     binaries = { 
         'preprocess' : {
             '*'         : ['sff2fastq'],
@@ -135,7 +137,7 @@ def test_system(command=None, exit_on_failure=False, output=False) :
         },
         'cluster' : {
             '*'         : ['pagan'],
-            'label'     : ['blastn']
+            'labels'    : ['blastn']
         },
         'label' : {
             '*'         : ['blastn']
@@ -165,10 +167,11 @@ def test_system(command=None, exit_on_failure=False, output=False) :
         if binaries[b] :
             print_out("checking system for %s command dependancies :" % bold(b))
             for o in binaries[b] :
-                for p in binaries[b][o] :
-                    installed = System.is_installed(p)
-                    print_out("    %s %s%s" % (p, "" if o == "*" else "(needed for --%s) " % o, 
-                        bold_green("found.") if installed else bold_red("not found!")))
+                if o == '*' or not options or options[o] :
+                    for p in binaries[b][o] :
+                        installed = System.is_installed(p)
+                        print_out("    %s %s%s" % (p, "" if o == "*" else "(needed for --%s) " % o, 
+                            bold_green("found.") if installed else bold_red("not found!")))
                     
                     if not installed :
                         fail = True    
@@ -304,6 +307,7 @@ Legal commands are %s (see below for options).
                         --refalignment=FILE     (expects fasta)
                         --reftree=FILE          (expects newick)
                         --denovo                (don't perform phylogenetic placement, just use RaXML)
+                        --subset=STR            (subset clusters for phylogenetic placement, e.g. --subset 'nematoda')
                         --clusters=FILE         (default = %s)\n""" % \
                (options['cluster-fasta'])
 
@@ -312,9 +316,10 @@ Legal commands are %s (see below for options).
                         --biom=FILE             (default = %s)
                         --tree=FILE             (default = %s)
                         --notree
-                        --subset=REGEX
+                        --subset=STR            (subset samples for inclusion into heatmap)
                         --outtree=FILE          (output tree used in separate newick file)
                         --fliptree              (flip tree upside down)
+                        --ladderise             (ladderise the tree)
                         --labelclip=X           (comma separated values, e.g.: nematoda,arthropoda)
                         --labeltokens=NUM       (need last NUM tokens in taxonomical labelling)
                         --scale=FLOAT           (set length of tree scale, default = %.2f)
@@ -430,7 +435,8 @@ def parse_args(command, args) :
                             "denovo",
                             "delimiter=",
                             "missing",
-                            "primererrors="
+                            "primererrors=",
+                            "ladderise"
                         ]
                     )
 
@@ -517,9 +523,9 @@ def parse_args(command, args) :
             methods = ['none', 'blast', 'taxonomy']
             if a in methods :
                 if a == 'none' :
-                    options['label-centroids'] = None
+                    options['labels'] = None
                 else :
-                    options['label-centroids'] = a
+                    options['labels'] = a
             else :
                 print >> stderr, "ERROR %s is not a valid labelling method (valid options: %s)" % \
                         (bold(a), list_sentence(bold_all(methods)))
@@ -565,7 +571,7 @@ def parse_args(command, args) :
             options['heatmap-out-tree'] = a
 
         elif o in ('--subset',) :
-            options['heatmap-regex'] = a
+            options['subset'] = a
 
         elif o in ('--fliptree',) :
             options['heatmap-flip-tree'] = True
@@ -583,7 +589,7 @@ def parse_args(command, args) :
             options['heatmap-label-tokens'] = expect_int("labeltokens", a)
         
         elif o in ('--denovo',) :
-            options['denovo-tree'] = True
+            options['denovo'] = True
     
         elif o in ('--delimiter',) :
             if not a :
@@ -596,6 +602,9 @@ def parse_args(command, args) :
 
         elif o in ('--primererrors',) :
             options['primererrors'] = expect_int("primererrors", a)
+
+        elif o in ('--ladderise',) :
+            options['heatmap-ladderise'] = True
 
         else :
             assert False, "unhandled option %s" % o
@@ -613,10 +622,13 @@ def check_options(command, options, log) :
 #    for i in options :
 #        print i, options[i]
 
-    if not system.check_directory(options['outdir'], create=True) :
+    if (command != 'preprocess') and (not system.check_directory(options['outdir'])) :
         exit(1)
 
     if command == 'preprocess' :
+        if not system.check_directory(options['outdir'], create=True) :
+            exit(1)
+
         if not system.check_files(options['input-files']) :
             exit(1)
 
@@ -675,7 +687,7 @@ def check_options(command, options, log) :
         if not system.check_file(options['cluster-fasta']) :
             exit(1)
 
-        if not options['denovo-tree'] :
+        if not options['denovo'] :
             if not options['silva-fasta'] or not options['silva-tree'] :
                 log.error("you must either specify the location of the reference alignment and phylogeny or else use the --denovo option")
                 exit(1)
@@ -714,7 +726,7 @@ def main() :
     log = setup_logging(options['verbose'])
     check_options(command, options, log)
 
-    test_system(command, exit_on_failure=True)
+    test_system(command, options, exit_on_failure=True)
     System.tempdir(options['outdir']) # some objects need this set
 
     wf = WorkFlow(options)

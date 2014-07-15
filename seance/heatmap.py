@@ -21,7 +21,7 @@ def dendropy2internal(tnode) :
 
     return [ [ dendropy2internal(children[0]), dendropy2internal(children[1]) ], 0.0 if tnode.edge_length is None else tnode.edge_length ]
 
-def parse_newick(newick_file) :
+def parse_newick(newick_file, ladderise) :
     #with open(newick_file) as f :
     #    s = f.read()
     # 
@@ -36,6 +36,9 @@ def parse_newick(newick_file) :
 
     tree = dendropy.Tree.get_from_path(newick_file, schema='newick', as_rooted=True)
     
+    if ladderise :
+        tree.ladderize(ascending=True)
+
     return dendropy2internal(tree.seed_node)
 
 def parse_biom(biom_file) :
@@ -317,20 +320,22 @@ def to_newick(tree) :
 def biom_subset(biom_data, include) :
     samples = biom_data['columns']
 
-    try :
-        pat = re.compile(include)
-    except :
-        print >> stderr, "ERROR bad regex ('%s')\n" % include 
-        exit(1)
+#    try :
+#        pat = re.compile(include)
+#    except :
+#        print >> stderr, "ERROR bad regex ('%s')\n" % include 
+#        exit(1)
 
+    include = include.lower()
     keep = []
 
     for index,sample in enumerate(samples) :
-        if pat.match(sample['id']) is not None :
+        #if pat.match(sample['id']) is not None :
+        if include in sample['id'].lower() :
             keep.append(index)
 
     if len(keep) == 0 :
-        print >> stderr, "ERROR subset regex '%s' matched zero samples!\n" % include
+        print >> stderr, "ERROR subset '%s' matched zero samples!\n" % include
         exit(1)
 
     new_data = []
@@ -341,10 +346,10 @@ def biom_subset(biom_data, include) :
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20, label_clips=[], label_tokens=-1) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20, label_clips=[], label_tokens=-1, ladderise=False) :
     global x_scalar, y_scalar, margin, tree_extent
 
-    newick_data = parse_newick(tree) if tree is not None else None
+    newick_data = parse_newick(tree, ladderise) if tree is not None else None
     biom_data = parse_biom(biomfile)
 
     if include :

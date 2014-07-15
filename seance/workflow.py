@@ -70,7 +70,7 @@ class WorkFlow(object) :
                 mf.add(
                         WindowedQualityFilter(
                             self.options['quality'], 
-                            elf.options['windowlength'])
+                            self.options['windowlength'])
                       )
 
         return mf
@@ -308,11 +308,11 @@ class WorkFlow(object) :
         self.__biom(biom_fname, samples, c, otu_names)
 
         # blast to get better names
-        if self.options['label-centroids'] :
+        if self.options['labels'] :
             print "getting OTU names (this may take a while)..."
-            otu_names = BlastN(self.options['verbose']).get_names(centroid_fname, self.options['label-centroids'])
+            otu_names = BlastN(self.options['verbose']).get_names(centroid_fname, self.options['labels'])
 
-            if self.options['label-centroids'] == 'blast' and self.options['merge-blast-hits'] :
+            if self.options['labels'] == 'blast' and self.options['merge-blast-hits'] :
                 c.merge(otu_names)
 
             # write out results files
@@ -332,7 +332,7 @@ class WorkFlow(object) :
             tmp = []
             biom = json.load(open(self.options['cluster-biom']))
             for r in biom['rows'] :
-                if r['metadata']['label'] in ("", "unknown", "error") :
+                if r['metadata']['label'] in ("", "unknown", "error", "cannot label (matches multiple domains!)") :
                     tmp.append(r['id'])
 
             if len(tmp) == 0 :
@@ -380,18 +380,25 @@ class WorkFlow(object) :
 
         return filename
 
-    def __read_fasta(self, filename, only_include=None) :
+    def __read_fasta(self, filename, include=None) :
         tmp = {}
+
+        if include :
+            include = include.lower()
 
         f = FastqFile(filename)
         f.open()
 
         for seq in f :
+            if include :
+                if include not in seq.id.lower() :
+                    continue
+
             seq.id = seq.id.split()[0][1:]
 
-            if only_include :
-                if seq.id not in only_include :
-                    continue
+            #if only_include :
+            #    if seq.id not in only_include :
+            #        continue
     
             tmp[seq.id] = seq
 
@@ -432,6 +439,12 @@ class WorkFlow(object) :
     def phylogeny(self) :
         num_sequences = self.__count(self.options['cluster-fasta'])
         p = Pagan()
+
+        if self.options['subset'] :
+            self.seqdb = self.__read_fasta(self.options['cluster-fasta'], include=self.options['subset'])
+            self.options['cluster-fasta'] = self.__fasta(self.options['cluster-fasta'] + '.subset', self.seqdb.keys())
+
+            self.log.info("read %d cluster centroids using subset(%s)" % (len(self.seqdb), self.options['subset']))
 
         if not self.options['silva-fasta'] :
             self.log.info("aligning %s sequences with PAGAN ..." % (num_sequences))
@@ -478,13 +491,14 @@ class WorkFlow(object) :
         phylogenetic_heatmap(self.options['cluster-biom'], 
                              tree=self.options['phylogeny-tree'], 
                              output=self.options['heatmap-pdf'],
-                             include=self.options['heatmap-regex'],
+                             include=self.options['subset'],
                              output_tree=self.options['heatmap-out-tree'],
                              flip_tree=self.options['heatmap-flip-tree'],
                              scale=self.options['heatmap-scale'],
                              tree_height_blocks=self.options['heatmap-tree-height'],
                              label_clips=self.options['heatmap-label-clip'],
-                             label_tokens=self.options['heatmap-label-tokens'])
+                             label_tokens=self.options['heatmap-label-tokens'],
+                             ladderise=self.options['heatmap-ladderise'])
 
         self.log.info("wrote %s" % self.options['heatmap-pdf'])
         print "wrote %s" % self.options['heatmap-pdf']
@@ -498,7 +512,12 @@ class WorkFlow(object) :
 
     def __write_summary(self, samples) :
         data = collections.defaultdict(dict)
-        fields = [ i[0] for i in samples[0].filters.filter_counts() ] + ['Chimera', 'Accepted', 'Unique']
+        fields = [ i[0] for i in samples[0].filters.filter_counts() ]
+
+        if self.options['chimeras'] :
+            fields.append('Chimera')
+
+        fields += ['Accepted', 'Unique']
 
         for s in samples :
             filename = s.fastq.get_filename()
@@ -564,7 +583,7 @@ class WorkFlow(object) :
 
         data = dict([ ((int(r),int(c)),int(q)) for r,c,q in biom['data']])
 
-        id2label = dict([ (i['id'], i['metadata']['label']) for i in biom['rows'] ])
+        id2label = dict([ (i['id'], i['metadata']['label']) for i in biom['rows'] if i['metadata']['label'] ])
 
         # output
         print delim.join([""] + cols)

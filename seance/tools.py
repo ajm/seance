@@ -9,6 +9,7 @@ import glob
 import shutil
 import collections
 import socket
+import xml.sax
 
 from os.path import abspath, join, dirname
 from seance.filetypes import SffFile, FastqFile
@@ -48,17 +49,22 @@ class ExternalProgram(object) :
         
         return None
     
-    def system(self, command, debug=True) :
+    def system(self, command, debug=True, silent=True) :
         if debug :
             self.log.debug(command)
-        retcode = os.system(command) 
+
+        if silent :
+            command += " > /dev/null 2> /dev/null"
+
+        retcode = os.system(command)
+
         if retcode != 0 :
             raise ExternalProgramError("'%s' return code %d" % (' '.join(command.split()), retcode))
 
 class Sff2Fastq(ExternalProgram) :
     def __init__(self) :
         super(Sff2Fastq, self).__init__('sff2fastq')
-        self.command = "sff2fastq -o %s %s 2> /dev/null"
+        self.command = "sff2fastq -o %s %s"
 
     def run(self, sff, outdir) :
         if not isinstance(sff, SffFile) :
@@ -108,7 +114,7 @@ class Pagan(ExternalProgram) :
         super(Pagan, self).__init__('pagan')
 
     def get_alignment(self, fasta_fname) :
-        command = "pagan --use-consensus --use-duplicate-weights --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
+        command = "pagan --use-consensus --use-duplicate-weights --pileup-alignment --queryfile %s --outfile %s"
         out_fname = fasta_fname + ".out"
 
         try :
@@ -122,7 +128,7 @@ class Pagan(ExternalProgram) :
         return FastqFile(out_fname + ".fas")
 
     def get_454_alignment(self, fasta_fname) :
-        command = "pagan --use-consensus --use-duplicate-weights --homopolymer --pileup-alignment --queryfile %s --outfile %s &> /dev/null"
+        command = "pagan --use-consensus --use-duplicate-weights --homopolymer --pileup-alignment --queryfile %s --outfile %s"
         out_fname = fasta_fname + ".out"
 
         try :
@@ -187,27 +193,40 @@ class Pagan(ExternalProgram) :
                          --trim-extended-alignment \
                          --prune-keep-number 0 \
                          --prune-extended-alignment \
-                         --prune-keep-closest"
+                         --prune-keep-closest \
+                         --both-strands"
 
         #out_fname = os.path.splitext(queries)[0] + ".silva"
         out_fname = queries + ".silva"
 
         try :
-            self.system(command % (ref_alignment, ref_tree, queries, out_fname))
+            self.system(command % (ref_alignment, ref_tree, queries, out_fname), silent=False)
 
         except ExternalProgramError, epe :
             self.log.error(str(epe))
             sys.exit(1)
 
         for f in [ queries + '.silva.' + i for i in ['fas','nhx_tree','xml'] ] :
-            os.remove(f)
+            if os.path.exists(f) :
+                os.remove(f)
 
-        return out_fname + ".pruned_closest.fas", out_fname + ".pruned_closest.tre", out_fname + ".pruned_closest.xml"
+        results = [ out_fname + ".pruned_closest." + i for i in ['fas','tre','xml'] ]
+        
+        err = False
+        for f in results :
+            if not os.path.exists(f) :
+                self.log.error("PAGAN result file %s not found!" % f)
+                err = True
+
+        if err :
+            sys.exit(1)
+
+        return results
 
 class Uchime(ExternalProgram) :
     def __init__(self) :
         super(Uchime, self).__init__('uchime')
-        self.command = "uchime --input %s --uchimeout %s &> /dev/null"
+        self.command = "uchime --input %s --uchimeout %s"
 
     def __parse(self, fname) :
         tmp = []
@@ -243,13 +262,47 @@ class Uchime(ExternalProgram) :
 
         return self.__parse(out_fname)
 
+class EutilsHandler(xml.sax.ContentHandler) :
+    def __init__(self, name_tag):
+        xml.sax.ContentHandler.__init__(self)
+
+        self.name_tag = name_tag
+
+        self.current = None
+        self.accession = None
+        self.taxonomy = None
+
+        self.data = {}
+
+    def startElement(self, name, attrs):
+        if name in ('Textseq-id_accession', self.name_tag) :
+            self.current = name
+
+    def endElement(self, name):
+        if name in ('Textseq-id_accession', self.name_tag) :
+            self.current = None
+
+        if name == 'Seq-entry' :
+            if self.accession and self.taxonomy :
+                self.data[self.accession] = self.taxonomy
+            self.accession = self.taxonomy = None
+
+    def characters(self, content):
+        if self.current == 'Textseq-id_accession' :
+            self.accession = content
+        elif self.current == self.name_tag :
+            self.taxonomy = content
+
+
 class BlastN(ExternalProgram) :
     def __init__(self, verbose) :
         super(BlastN, self).__init__('blastn')
         self.command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -perc_identity 90 -entrez_query 'all[filter] NOT (environmental samples[organism] OR metagenomes[orgn])'"
-        self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=xml"
-        self.regex = {  "blast"     : "Org\-ref_taxname",
-                        "taxonomy"  : "OrgName_lineage" }
+        #self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=xml"
+        self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=gb"
+        #self.regex = {  #"blast"     : "Org\-ref_taxname",
+        #                "blast"     : "Org-ref_taxname",
+        #                "taxonomy"  : "OrgName_lineage" }
         self.verbose = verbose
 
     def __merge_taxonomy(self, names) :
@@ -291,6 +344,10 @@ class BlastN(ExternalProgram) :
     def __get_desc_wrapper(self, name, method, max_attempts, return_on_failure='error') :
         attempts = 0
 
+        f = open('accessions.txt', 'a')
+        print >> f, name
+        f.close()
+
         while True :
             try :
                 return self.__get_desc(name, method)
@@ -305,42 +362,84 @@ class BlastN(ExternalProgram) :
     def __get_desc(self, name, method) :
         try :
             f = urllib2.urlopen(self.url % name, None, 5)
-            tmp = None
+            
+            #e = EutilsHandler(self.regex[method])
+            #xml.sax.parse(f, e)
+            #accession = name.split('.')[0]
+            #try :
+            #    tmp = e.data[accession]
+            #except KeyError :
+            #    tmp = None
 
+            tmp = None
+            #found_accession = False
+            
+            #for line in f :
+            #    m = re.match("\W*<Textseq-id_accession>(.*)</Textseq-id_accession>", line)
+            #    if m :
+            #        if name.startswith(m.group(1)) : # startswith because there is e.g. ".1" for the version number
+            #            found_accession = True
+            #            print >> sys.stderr, "found %s" % m.group(1)
+            #            continue
+            #        else :
+            #            print >> sys.stderr, "skipping %s" % m.group(1)
+            
+            #    if not found_accession :
+            #        continue
+            
+            #    m = re.match("\W*<%s>(.*)</%s>" % (self.regex[method], self.regex[method]), line) 
+            #    if m :
+            #        tmp = m.group(1)
+            #        break
+            
             for line in f :
-                m = re.match("\W*<%s>(.*)</%s>" % (self.regex[method], self.regex[method]), line) 
-                if m :
-                    tmp = m.group(1)
+                line = line.strip()
+
+                if line.startswith('REFERENCE') :
                     break
+
+                if line.startswith('ORGANISM') :
+                    if method == 'blast' :
+                        tmp = line[len('ORGANISM'):].strip()
+                        break
+                    elif method == 'taxonomy' :
+                        tmp = ""
+                        continue
+
+                if tmp is not None :
+                    tmp += line.replace(' ', '').replace('.','')
 
             f.close()
 
             if tmp is None :
                 self.log.error("Error calling NCBI eutils with '%s'" % name)
-                tmp = "none"
+                tmp = "error"
 
-            if method == 'taxonomy' :
-                tmp = tmp.replace(" ", "")
+            #if method == 'taxonomy' :
+            #    tmp = tmp.replace(" ", "")
             
-            #self.log.info(tmp)
             return tmp
 
         except urllib2.HTTPError, he :
-            self.log.debug("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
+            self.log.error("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(he)))
             raise he
 
         except urllib2.URLError, ue :
-            self.log.debug("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(ue)))
+            self.log.error("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(ue)))
             raise ue
 
         except socket.timeout, to :
-            self.log.debug("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(to)))
+            self.log.error("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(to)))
             raise to
+
+        #except xml.sax.SAXParseException, spe :
+        #    self.log.error("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(spe)))
+        #    raise spe
 
     def get_names(self, fasta_fname, method) :
         #self.log.info("getting OTU names (this may take a while)...")
 
-        if method not in self.regex.keys() :
+        if method not in ('blast', 'taxonomy'): #self.regex.keys() :
             self.log.error("'%s' is not a valid labelling method" % method)
             sys.exit(1)
 
@@ -349,6 +448,9 @@ class BlastN(ExternalProgram) :
         if s != 0 :
             self.log.error("blastn returned %d" % s)
             sys.exit(1)
+
+        if o.strip() == '' :
+            return {}
 
         names = collections.defaultdict(list)
         scores = {}
@@ -408,7 +510,7 @@ class BlastN(ExternalProgram) :
 class PyroDist(ExternalProgram) :
     def __init__(self) :
         super(PyroDist, self).__init__('PyroDist')
-        self.command = "PyroDist -in %s -out %s -rin %s &> /dev/null"
+        self.command = "PyroDist -in %s -out %s -rin %s"
 
     def __lookup_file(self) :
         f = join(dirname(ExternalProgram.get_path(self.programname)), "LookUp.dat")
@@ -431,7 +533,7 @@ class PyroDist(ExternalProgram) :
 class FCluster(ExternalProgram) :
     def __init__(self) :
         super(FCluster, self).__init__('FCluster')
-        self.command = "FCluster -in %s -out %s &> /dev/null"
+        self.command = "FCluster -in %s -out %s"
 
     def run(self, fdistfile, outfile) :
         try :
@@ -446,7 +548,7 @@ class FCluster(ExternalProgram) :
 class PyroNoise(ExternalProgram) :
     def __init__(self) :
         super(PyroNoise, self).__init__('PyroNoise')
-        self.command = "PyroNoise -din %s -out %s -lin %s -rin %s -s 60.0 -c 0.01 &> /dev/null"
+        self.command = "PyroNoise -din %s -out %s -lin %s -rin %s -s 60.0 -c 0.01"
 
     def __lookup_file(self) :
         f = join(dirname(ExternalProgram.get_path(self.programname)), "LookUp.dat")
