@@ -21,6 +21,7 @@ from seance.biom import BiomFile
 from seance.heatmap import heatmap as phylogenetic_heatmap
 from seance.wasabi import wasabi as view_in_wasabi
 from seance.system import System
+from seance.summary import Summary
 
 
 class WorkFlow(object) :
@@ -152,7 +153,12 @@ class WorkFlow(object) :
                 (rejected_reads + accepted_reads, accepted_reads, unique_seq)
 
         if samples :
-            self.__write_summary(samples)
+            summary_data = self.__build_summary(samples)
+
+            summary_file = Summary(self.options['summary-file'])
+            summary_file.update(summary_data)
+            summary_file.write(self.options['summary-file'])
+
 
         if self.options['verbose'] :
             self.summary()
@@ -510,14 +516,8 @@ class WorkFlow(object) :
                               self.options['wasabi-url'],
                               self.options['wasabi-user'])
 
-    def __write_summary(self, samples) :
+    def __build_summary(self, samples) :
         data = collections.defaultdict(dict)
-        fields = [ i[0] for i in samples[0].filters.filter_counts() ]
-
-        if self.options['chimeras'] :
-            fields.append('Chimera')
-
-        fields += ['Accepted', 'Unique']
 
         for s in samples :
             filename = s.fastq.get_filename()
@@ -528,20 +528,11 @@ class WorkFlow(object) :
 
             if self.options['chimeras'] :
                 data[filename]['Chimera'] = sum([ s.seqcounts[i] for i in s.chimeras ])
+            
             data[filename]['Accepted'] = len(s)
             data[filename]['Unique'] = len([ i for i in s.seqcounts if i not in s.chimeras ])
 
-        if not exists(self.options['summary-file']) :
-            with open(self.options['summary-file'], 'w') as f :
-                print >> f, ','.join(['Filename'] + [ i.replace("Filter", "") for i in fields ])
-                self.log.info("created %s" % f.name)
-
-        # want to append in case we do multiple preprocess commands
-        with open(self.options['summary-file'], 'a') as f :
-            for fn in sorted(data.keys()) :
-                print >> f, ','.join([fn] + [ str(data[fn][field]) for field in fields ])
-        
-            self.log.info("wrote %s" % f.name)
+        return data
 
     def summary(self) :
         header_constant = 4
@@ -563,6 +554,10 @@ class WorkFlow(object) :
 
             for line in f :
                 tmp = line.rstrip().split(',')
+
+                if tmp[0] == 'Totals' :
+                    print ""
+
                 x = max_length - len(tmp[0])
                 print (" " * x) + (fmt_str % tuple(tmp))
             
