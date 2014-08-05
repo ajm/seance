@@ -298,8 +298,8 @@ Legal commands are %s (see below for options).
                         --missing               (only fetch missing labels)
                         --labels=X              (default = taxonomy, options = (none, blast, taxonomy))\n"""
 
-    if command in ('showcounts', 'all') :
-        print >> stderr, """    Count options:
+    if command in ('showcounts', 'showlabels', 'all') :
+        print >> stderr, """    Showcounts and showlabels options:
                         --delimiter=STR         (default = '\\t')\n"""
 
     if command in ('phylogeny','all') :
