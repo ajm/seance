@@ -78,7 +78,8 @@ def get_default_options(command, fillin=False) :
             'silva-tree'        : None,
             'denovo'            : False,
 
-            'subset'            : None,
+            'subset'            : "",
+            'min-bin-count'     : 1,
 
             'heatmap-no-tree'   : False,
             'heatmap-pdf'       : 'seance.pdf',
@@ -100,7 +101,7 @@ def get_default_options(command, fillin=False) :
         apply_prefix(tmp)
 
     if command == 'label' :
-        tmp['label'] = 'taxonomy'
+        tmp['labels'] = 'taxonomy'
 
     return tmp
 
@@ -317,6 +318,8 @@ Legal commands are %s (see below for options).
                         --tree=FILE             (default = %s)
                         --notree
                         --subset=STR            (subset samples for inclusion into heatmap)
+                        --mincount=INT          (minimum bin count to include in heatmap 
+                                                - this may result in some samples being dropped from the output)
                         --outtree=FILE          (output tree used in separate newick file)
                         --fliptree              (flip tree upside down)
                         --ladderise             (ladderise the tree)
@@ -426,6 +429,7 @@ def parse_args(command, args) :
                             "url=",
                             "user=",
                             "subset=",
+                            "mincount=",
                             "outtree=",
                             "fliptree",
                             "treescale=",
@@ -573,6 +577,9 @@ def parse_args(command, args) :
         elif o in ('--subset',) :
             options['subset'] = a
 
+        elif o in ('--mincount',) :
+            options['min-bin-count'] = expect_int("mincount", a)
+
         elif o in ('--fliptree',) :
             options['heatmap-flip-tree'] = True
 
@@ -674,7 +681,7 @@ def check_options(command, options, log) :
             log.error("could not find %s, did you run the 'cluster' command yet?" % filename_or())
             exit(1)
 
-        if not options['label-centroids'] :
+        if not options['labels'] :
             log.error("you must specify a labelling method")
             exit(1)
 

@@ -350,7 +350,7 @@ class WorkFlow(object) :
 
 
         print "getting OTU names (this may take a while)..."
-        otu_names = BlastN(self.options['verbose']).get_names(blast_fname, self.options['label-centroids'])
+        otu_names = BlastN(self.options['verbose']).get_names(blast_fname, self.options['labels'])
 
         # rework the biom
         biom = BiomFile()
@@ -497,7 +497,8 @@ class WorkFlow(object) :
         phylogenetic_heatmap(self.options['cluster-biom'], 
                              tree=self.options['phylogeny-tree'], 
                              output=self.options['heatmap-pdf'],
-                             include=self.options['subset'],
+                             str_include=self.options['subset'],
+                             count_include=self.options['min-bin-count'],
                              output_tree=self.options['heatmap-out-tree'],
                              flip_tree=self.options['heatmap-flip-tree'],
                              scale=self.options['heatmap-scale'],

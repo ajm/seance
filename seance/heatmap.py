@@ -58,13 +58,13 @@ def preprocess_data(tree_data, biom_data) :
     seen_species, seen_samples = zip(*[ (x,y) for x,y,c in counts ])
     
     seen_species = sorted(set(seen_species))
-    seen_samples = sorted(set(seen_samples))
+    #seen_samples = sorted(set(seen_samples))
 
     #
     # get new lists of non-zero sample names and species names
     #
-    new_samples = [ samples[i]['id'] for i in seen_samples ]
     new_species = [ species[i]['id'] for i in seen_species ]
+    #new_samples = [ samples[i]['id'] for i in seen_samples ]
 
     if tree_data is not None :
         #
@@ -96,9 +96,22 @@ def preprocess_data(tree_data, biom_data) :
         new_tree = None
 
     #
+    # remove samples with all zero counts for species represented in the tree
+    #
+    seen_samples = set()
+
+    for species_x,sample_y,freq in counts :
+        if species_x in seen_species :
+            seen_samples.add(sample_y)
+
+    seen_samples = sorted(seen_samples)
+    new_samples = [ samples[i]['id'] for i in seen_samples ]
+
+    #
     # change the count data to reflect the ordering from the tree
     #
-    not_found = set()
+    not_found_species = set()
+    not_found_samples = set()
     new_counts = {} # key = (species_index, sample_index)
 
     for species_x,sample_y,freq in counts :
@@ -106,12 +119,17 @@ def preprocess_data(tree_data, biom_data) :
             s_x = seen_species.index(species_x)
 
         except ValueError :
-            not_found.add(species[species_x]['id'])
+            not_found_species.add(species[species_x]['id'])
             continue
 
-        s_y = seen_samples.index(sample_y)
+        try :
+            s_y = seen_samples.index(sample_y)
 
-        # i want sames on the x and species on the y
+        except ValueError :
+            not_found_samples.add(samples[sample_y]['id'])
+            continue
+
+        # i want samples on the x and species on the y
         # so swap them
         new_counts[(s_y, s_x)] = freq
 
@@ -121,13 +139,19 @@ def preprocess_data(tree_data, biom_data) :
 #    print >> stderr, "%d samples, %d species" % (len(samples), len(species))
 #    print >> stderr, "%d non-zero samples, %d non-zero species" % (len(new_samples), len(new_species))
 
-    if len(not_found) :
-        print >> stderr, "%d samples from the count data were non-zero, but not found in the tree" % (len(not_found))
-        for i in not_found :
+    if len(not_found_species) :
+        print >> stderr, "%d species from the count data were non-zero, but not found in the tree" % (len(not_found_species))
+        for i in not_found_species :
+            print >> stderr, "\t%s" % i
+
+    if len(not_found_samples) :
+        print >> stderr, "%d samples omitted due to only containing non-zero counts from species not in the tree" % (len(not_found_samples))
+        for i in not_found_samples :
             print >> stderr, "\t%s" % i
 
     id2label = dict([ (species[i]['id'], species[i]['metadata']['label']) for i in seen_species ])
 
+    
     return { 
              'tree'    : new_tree,
              'species' : species_name_transform(new_species, id2label),
@@ -317,7 +341,7 @@ def to_newick(tree) :
 
     return "(%s,%s):%f" % (left, right, distance)
 
-def biom_subset(biom_data, include) :
+def biom_subset(biom_data, str_include, count_include) :
     samples = biom_data['columns']
 
 #    try :
@@ -326,12 +350,12 @@ def biom_subset(biom_data, include) :
 #        print >> stderr, "ERROR bad regex ('%s')\n" % include 
 #        exit(1)
 
-    include = include.lower()
+    str_include = str_include.lower()
     keep = []
 
     for index,sample in enumerate(samples) :
         #if pat.match(sample['id']) is not None :
-        if include in sample['id'].lower() :
+        if str_include in sample['id'].lower() : #and "NA" not in sample['id'] :
             keep.append(index)
 
     if len(keep) == 0 :
@@ -341,19 +365,21 @@ def biom_subset(biom_data, include) :
     new_data = []
 
     for x,y,c in biom_data['data'] :
-        if int(y) in keep :
+        if (int(y) in keep) and (int(c) >= count_include) :
             new_data.append((x,y,c))
 
     return new_data
 
-def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, include=None, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20, label_clips=[], label_tokens=-1, ladderise=False) :
+def heatmap(biomfile, tree=None, output="heatmap.pdf", draw_guidelines=False, str_include="", count_include=1, output_tree=None, flip_tree=False, scale=0.05, tree_height_blocks=20, label_clips=[], label_tokens=-1, ladderise=False) :
     global x_scalar, y_scalar, margin, tree_extent
 
     newick_data = parse_newick(tree, ladderise) if tree is not None else None
     biom_data = parse_biom(biomfile)
 
-    if include :
-        biom_data['data'] = biom_subset(biom_data, include)
+    # always run this now
+    # only include samples with id that contains str_include (default: empty string, i.e. all)
+    # only include samples with bin counts greater than count_include (default: 1, i.e. everything) - this is needed due to log scaling
+    biom_data['data'] = biom_subset(biom_data, str_include, count_include)
 
     if flip_tree :
         newick_data = flip_tree_horizontal(newick_data)
