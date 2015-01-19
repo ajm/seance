@@ -1,0 +1,12 @@
+Séance is a community analysis pipeline for the 18S rRNA marker gene 
+incorporating homopolymer modelling for clustering 454 data, phylogenetic 
+placement and visualisation.
+
+Séance is distributed under the GPLv3 license (see COPYING)
+
+Installation instructions can be found in INSTALL and at:
+    http://wasabiapp.org/software/seance/installing-seance/
+
+Usage guidelines can be found at:
+    http://wasabiapp.org/software/seance/using-seance/
+
