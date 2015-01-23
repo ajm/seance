@@ -64,6 +64,7 @@ def get_default_options(command, fillin=False) :
             'summary-file'      : None,
 
             'labels'            : None,
+            'labels_db'         : None,
             'label-missing'     : False,
 
             'delimiter'         : '\t',
@@ -127,7 +128,7 @@ def apply_prefix(d, command='all') :
         d['phylogeny-xml'] = tmp + '.phylogeny.xml'
 
 def get_all_programs() :
-    return ['sff2fastq', 'pagan', 'raxml', 'bppphysamp', 'exonerate', 'uchime', 'blastn', 'PyroDist', 'FCluster', 'PyroNoise']
+    return ['sff2fastq', 'pagan', 'raxml', 'bppphysamp', 'exonerate', 'uchime', 'blastn', 'makeblastdb', 'PyroDist', 'FCluster', 'PyroNoise']
 
 def test_system(command=None, options=None, exit_on_failure=False, output=False) :
     binaries = { 
@@ -138,10 +139,10 @@ def test_system(command=None, options=None, exit_on_failure=False, output=False)
         },
         'cluster' : {
             '*'         : ['pagan'],
-            'labels'    : ['blastn']
+            'labels'    : ['blastn', 'makeblastdb']
         },
         'label' : {
-            '*'         : ['blastn']
+            '*'         : ['blastn', 'makeblastdb']
         },
         'summary' : {},
         'showcounts' : {},
@@ -297,7 +298,8 @@ Legal commands are %s (see below for options).
     if command in ('label', 'all') :
         print >> stderr, """    Label options:
                         --missing               (only fetch missing labels)
-                        --labels=X              (default = taxonomy, options = (none, blast, taxonomy))\n"""
+                        --labels=X              (default = taxonomy, options = (none, blast, taxonomy, blastlocal))
+                        --dbfile=FILE           (FASTA format to create local blast database)\n"""
 
     if command in ('showcounts', 'showlabels', 'all') :
         print >> stderr, """    Showcounts and showlabels options:
@@ -417,6 +419,7 @@ def parse_args(command, args) :
                             "verbose",
                             "help",
                             "labels=",
+                            "dbfile=",
                             "mergeclusters",
                             "chimeras",
                             "nohomopolymer",
@@ -524,7 +527,7 @@ def parse_args(command, args) :
             options['silva-tree'] = a
 
         elif o in ('--labels',) :
-            methods = ['none', 'blast', 'taxonomy']
+            methods = ['none', 'blast', 'taxonomy', 'blastlocal']
             if a in methods :
                 if a == 'none' :
                     options['labels'] = None
@@ -534,6 +537,9 @@ def parse_args(command, args) :
                 print >> stderr, "ERROR %s is not a valid labelling method (valid options: %s)" % \
                         (bold(a), list_sentence(bold_all(methods)))
                 exit(1)
+
+        elif o in ('--dbfile',) :
+            options['labels_db'] = a
 
         elif o in ('--mergeclusters',) :
             options['merge-blast-hits'] = True
@@ -662,6 +668,16 @@ def check_options(command, options, log) :
             log.error("similarity must be between 0.8 and 1.0 (read %.2f)" % options['otu-similarity'])
             exit(1)
 
+        if options['labels'] :
+            if options['labels'] == 'blastlocal' :
+                if not options['labels_db'] :
+                    log.error("'blastlocal' requires you specify a FASTA file to use as a blast database using the --dbfile option")
+                    exit(1)
+
+                if not system.check_file(options['labels_db']) :
+                    log.error("could not find %s" % options['labels_db'])
+                    exit(1)
+
     elif command == 'summary' :
         if not system.check_file(options['summary-file']) :
             log.error("could not find %s, did you run the 'preprocess' command yet?" % options['summary-file'])
@@ -684,6 +700,15 @@ def check_options(command, options, log) :
         if not options['labels'] :
             log.error("you must specify a labelling method")
             exit(1)
+
+        if options['labels'] == 'blastlocal' :
+            if not options['labels_db'] :
+                log.error("'blastlocal' requires you specify a FASTA file to use as a blast database using the --dbfile option")
+                exit(1)
+
+            if not system.check_file(options['labels_db']) :
+                log.error("could not find %s" % options['labels_db'])
+                exit(1)
 
     elif command == 'showcounts' or command == 'showlabels' :
         if not system.check_file(options['cluster-biom']) :

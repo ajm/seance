@@ -297,13 +297,20 @@ class EutilsHandler(xml.sax.ContentHandler) :
 class BlastN(ExternalProgram) :
     def __init__(self, verbose) :
         super(BlastN, self).__init__('blastn')
-        self.command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -perc_identity 90 -entrez_query 'all[filter] NOT (environmental samples[organism] OR metagenomes[orgn])'"
-        #self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=xml"
+        self.remote_command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -perc_identity 90 -entrez_query 'all[filter] NOT (environmental samples[organism] OR metagenomes[orgn])'"
+        self.local_command = "blastn -query %s -db %s -task megablast -outfmt 10 -perc_identity 90"
+        self.db_command = "makeblastdb -in %s -dbtype nucl"
         self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=gb"
-        #self.regex = {  #"blast"     : "Org\-ref_taxname",
-        #                "blast"     : "Org-ref_taxname",
-        #                "taxonomy"  : "OrgName_lineage" }
         self.verbose = verbose
+
+    def make_local_db(self, db_fname) :
+        print "building blast database using %s ..." % db_fname
+        s,o = commands.getstatusoutput(self.db_command % db_fname)
+
+        if s != 0 :
+            self.log.error("makeblastdb returned %d" % s)
+            self.log.error(o)
+            sys.exit(1)
 
     def __merge_taxonomy(self, names) :
         tmp = collections.defaultdict(list)
@@ -320,7 +327,6 @@ class BlastN(ExternalProgram) :
                 s += (";%s" % tmp[i][0])
             else :
                 break
-                #s += (";{%s}" % ','.join(sorted(tmp[i])))
         
         if len(s) == 0 :
             return "cannot label (matches multiple domains!)"
@@ -328,8 +334,6 @@ class BlastN(ExternalProgram) :
         return s[1:]
 
     def __get_desc_common(self, names, method, progress) :
-        #return self.__merge_taxonomy([ self.__get_desc(i[0], method) for i in names ])
-
         tmp = []
 
         for i in names :
@@ -344,9 +348,9 @@ class BlastN(ExternalProgram) :
     def __get_desc_wrapper(self, name, method, max_attempts, return_on_failure='error') :
         attempts = 0
 
-        f = open('accessions.txt', 'a')
-        print >> f, name
-        f.close()
+#        f = open('accessions.txt', 'a')
+#        print >> f, name
+#        f.close()
 
         while True :
             try :
@@ -362,35 +366,7 @@ class BlastN(ExternalProgram) :
     def __get_desc(self, name, method) :
         try :
             f = urllib2.urlopen(self.url % name, None, 5)
-            
-            #e = EutilsHandler(self.regex[method])
-            #xml.sax.parse(f, e)
-            #accession = name.split('.')[0]
-            #try :
-            #    tmp = e.data[accession]
-            #except KeyError :
-            #    tmp = None
-
             tmp = None
-            #found_accession = False
-            
-            #for line in f :
-            #    m = re.match("\W*<Textseq-id_accession>(.*)</Textseq-id_accession>", line)
-            #    if m :
-            #        if name.startswith(m.group(1)) : # startswith because there is e.g. ".1" for the version number
-            #            found_accession = True
-            #            print >> sys.stderr, "found %s" % m.group(1)
-            #            continue
-            #        else :
-            #            print >> sys.stderr, "skipping %s" % m.group(1)
-            
-            #    if not found_accession :
-            #        continue
-            
-            #    m = re.match("\W*<%s>(.*)</%s>" % (self.regex[method], self.regex[method]), line) 
-            #    if m :
-            #        tmp = m.group(1)
-            #        break
             
             for line in f :
                 line = line.strip()
@@ -415,9 +391,6 @@ class BlastN(ExternalProgram) :
                 self.log.error("Error calling NCBI eutils with '%s'" % name)
                 tmp = "error"
 
-            #if method == 'taxonomy' :
-            #    tmp = tmp.replace(" ", "")
-            
             return tmp
 
         except urllib2.HTTPError, he :
@@ -432,19 +405,21 @@ class BlastN(ExternalProgram) :
             self.log.error("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(to)))
             raise to
 
-        #except xml.sax.SAXParseException, spe :
-        #    self.log.error("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(spe)))
-        #    raise spe
-
-    def get_names(self, fasta_fname, method) :
-        #self.log.info("getting OTU names (this may take a while)...")
-
-        if method not in ('blast', 'taxonomy'): #self.regex.keys() :
+    def get_names(self, fasta_fname, method, db_fname=None) :
+        if method not in ('blast', 'taxonomy', 'blastlocal') :
             self.log.error("'%s' is not a valid labelling method" % method)
             sys.exit(1)
 
-        s,o = commands.getstatusoutput(self.command % fasta_fname)
-        
+
+        if db_fname is not None :
+            self.make_local_db(db_fname)
+            command = self.local_command % (fasta_fname, db_fname)
+        else :
+            command = self.remote_command % (fasta_fname)
+
+        print "running queries..."
+        s,o = commands.getstatusoutput(command)
+
         if s != 0 :
             self.log.error("blastn returned %d" % s)
             sys.exit(1)
@@ -478,16 +453,18 @@ class BlastN(ExternalProgram) :
             if scores[name] != score :
                 continue
 
-            try :
-                desc = fields[1].split('|')
+            if method == 'blastlocal' :
+                names[name].append(fields[1])
+            else :
+                try :
+                    desc = fields[1].split('|')
 
-                if re.match(".+\.\d+", desc[3]) :
-                    names[name].append((desc[3], fields[2]))
-                    #names[name] = "%s_%s_%s" % (fields[0], self.__get_desc(desc[3], method), fields[2])
+                    if re.match(".+\.\d+", desc[3]) :
+                        names[name].append((desc[3], fields[2]))
 
-            except IndexError :
-                self.log.warn("could not split line from blastn: %s" % str(fields))
-                continue
+                except IndexError :
+                    self.log.warn("could not split line from blastn: %s" % str(fields))
+                    continue
 
         p = Progress("OTU naming (%s)" % method, sum([len(i) for i in names.values()]) if method == 'taxonomy' else len(names))
         p.start()
@@ -502,6 +479,9 @@ class BlastN(ExternalProgram) :
         elif method == 'taxonomy' :
             for name in names :
                 names[name] = "%s" % (self.__get_desc_common(names[name], method, p))
+        elif method == 'blastlocal' :
+            for name in names :
+                names[name] = "%s" % self.__merge_taxonomy(names[name])
 
         p.end()
 
