@@ -64,6 +64,7 @@ def get_default_options(command, fillin=False) :
             'summary-file'      : None,
 
             'labels'            : None,
+            'labels-similarity' : 0.95,
             'labels_db'         : None,
             'label-missing'     : False,
 
@@ -102,7 +103,7 @@ def get_default_options(command, fillin=False) :
         apply_prefix(tmp)
 
     if command == 'label' :
-        tmp['labels'] = 'taxonomy'
+        tmp['labels'] = 'blastlocal'
 
     return tmp
 
@@ -285,6 +286,7 @@ Legal commands are %s (see below for options).
         -t REAL         --similarity=REAL       (default = %s)
         
                         --labels=X              (default = none, options = (none, blast, taxonomy))
+                        --cutoff=REAL      (default = 0.95)
                         --mergeclusters         (default = %s)
                         --nohomopolymer         (default = %s)\n""" % \
                (options['metadata'],
@@ -298,7 +300,8 @@ Legal commands are %s (see below for options).
     if command in ('label', 'all') :
         print >> stderr, """    Label options:
                         --missing               (only fetch missing labels)
-                        --labels=X              (default = taxonomy, options = (none, blast, taxonomy, blastlocal))
+                        --labels=X              (default = blastlocal, options = (none, blast, taxonomy, blastlocal))
+                        --cutoff=REAL      (default = 0.95)
                         --dbfile=FILE           (FASTA format to create local blast database)\n"""
 
     if command in ('showcounts', 'showlabels', 'all') :
@@ -373,10 +376,22 @@ def expect_cast(parameter, argument, func) :
         exit(1)
 
 def expect_int(parameter, argument) :
-    return expect_cast(parameter, argument, int)
+    ret = expect_cast(parameter, argument, int)
+
+    if ret < 0 :
+        print >> stderr, "Problem parsing argument for %s: negative value given\n" % (parameter)
+        exit(1)
+
+    return ret
 
 def expect_float(parameter, argument) :
-    return expect_cast(parameter, argument, float)
+    ret = expect_cast(parameter, argument, float)
+
+    if ret < 0 :
+        print >> stderr, "Problem parsing argument for %s: not in range [0.0, 1.0]\n" % (parameter)
+        exit(1)
+
+    return ret
 
 def expect_iupac(parameter, argument) :
     tmp = argument.upper()
@@ -419,6 +434,7 @@ def parse_args(command, args) :
                             "verbose",
                             "help",
                             "labels=",
+                            "cutoff=",
                             "dbfile=",
                             "mergeclusters",
                             "chimeras",
@@ -537,6 +553,9 @@ def parse_args(command, args) :
                 print >> stderr, "ERROR %s is not a valid labelling method (valid options: %s)" % \
                         (bold(a), list_sentence(bold_all(methods)))
                 exit(1)
+
+        elif o in ('--cutoff',) :
+            options['label-similarity'] = expect_float("cutoff", a)
 
         elif o in ('--dbfile',) :
             options['labels_db'] = a

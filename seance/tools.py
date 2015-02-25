@@ -297,8 +297,8 @@ class EutilsHandler(xml.sax.ContentHandler) :
 class BlastN(ExternalProgram) :
     def __init__(self, verbose) :
         super(BlastN, self).__init__('blastn')
-        self.remote_command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -perc_identity 90 -entrez_query 'all[filter] NOT (environmental samples[organism] OR metagenomes[orgn])'"
-        self.local_command = "blastn -query %s -db %s -task megablast -outfmt 10 -perc_identity 90"
+        self.remote_command = "blastn -query %s -db nr -remote -task megablast -outfmt 10 -perc_identity %d -max_target_seqs 1000 -entrez_query 'all[filter] NOT (environmental samples[organism] OR metagenomes[orgn])'"
+        self.local_command = "blastn -query %s -db %s -task megablast -outfmt 10 -perc_identity %d -max_target_seqs 1000"
         self.db_command = "makeblastdb -in %s -dbtype nucl"
         self.url = "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nucleotide&id=%s&rettype=gb"
         self.verbose = verbose
@@ -405,20 +405,36 @@ class BlastN(ExternalProgram) :
             self.log.error("querying ncbi eutils for %s failed (%s), retrying..." % (name, str(to)))
             raise to
 
-    def get_names(self, fasta_fname, method, db_fname=None) :
+    def get_names(self, fasta_fname, method, perc_identity, db_fname=None) :
         if method not in ('blast', 'taxonomy', 'blastlocal') :
             self.log.error("'%s' is not a valid labelling method" % method)
             sys.exit(1)
 
+        # build query_name -> query_length dict
+        query_length = {}
+        f = FastqFile(fasta_fname)
+        f.open()
+        for s in f :
+            query_name = s.id[1:s.id.index(' ')] if ' ' in s.id else s.id[1:]
+            query_length[query_name] = float(len(s))
+
+        f.close()
+        # built
 
         if db_fname is not None :
             self.make_local_db(db_fname)
-            command = self.local_command % (fasta_fname, db_fname)
+            command = self.local_command % (fasta_fname, db_fname, int(100 * perc_identity))
         else :
-            command = self.remote_command % (fasta_fname)
+            command = self.remote_command % (fasta_fname, int(100 * perc_identity))
 
         print "running queries..."
         s,o = commands.getstatusoutput(command)
+
+        # qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore
+        # 
+        # i want the top scoring hits in terms of percent identity to the query
+        # i.e. ((hit_length * identity) / query_length)
+        #
 
         if s != 0 :
             self.log.error("blastn returned %d" % s)
@@ -428,7 +444,6 @@ class BlastN(ExternalProgram) :
             return {}
 
         names = collections.defaultdict(list)
-        scores = {}
 
         for line in o.split('\n') :
             fields = line.split(',')
@@ -439,19 +454,22 @@ class BlastN(ExternalProgram) :
                 name = fields[0]
 
             try :
-                score = float(fields[-1])
+                pident = float(fields[2]) / 100.0
+                length = int(fields[3])
+                evalue = float(fields[-2])
+                bitscore = float(fields[-1])
 
             except ValueError, ve :
                 self.log.warn("problem with blast result (%s), skipping..." % (str(ve)))
                 self.log.debug(line)
                 continue
 
-            if name not in scores :
-                scores[name] = score
+            score = (pident * length) / query_length[name]
 
             # only keep the highest scoring hits
-            if scores[name] != score :
+            if score < perc_identity :
                 continue
+
 
             if method == 'blastlocal' :
                 names[name].append(fields[1])
@@ -475,13 +493,13 @@ class BlastN(ExternalProgram) :
                 tmp = names[name][0]
                 names[name] = "%s_%s" % (self.__get_desc_wrapper(tmp[0], method, 10), tmp[1])
                 p.increment()
-                #names[name] = "%s_%s" % (self.__get_desc_concat(names[name], method), tmp[1])
         elif method == 'taxonomy' :
             for name in names :
                 names[name] = "%s" % (self.__get_desc_common(names[name], method, p))
         elif method == 'blastlocal' :
             for name in names :
-                names[name] = "%s" % self.__merge_taxonomy(names[name])
+                names[name] = "%s" % (self.__merge_taxonomy(names[name]))
+                p.increment()
 
         p.end()
 

@@ -316,7 +316,7 @@ class WorkFlow(object) :
         # blast to get better names
         if self.options['labels'] :
             print "getting OTU names (this may take a while)..."
-            otu_names = BlastN(self.options['verbose']).get_names(centroid_fname, self.options['labels'], self.options['labels_db'])
+            otu_names = BlastN(self.options['verbose']).get_names(centroid_fname, self.options['labels'], self.options['labels-similarity'], self.options['labels_db'])
 
             if self.options['labels'] == 'blast' and self.options['merge-blast-hits'] :
                 c.merge(otu_names)
@@ -350,7 +350,7 @@ class WorkFlow(object) :
 
 
         print "getting OTU names (this may take a while)..." 
-        otu_names = BlastN(self.options['verbose']).get_names(blast_fname, self.options['labels'], self.options['labels_db'])
+        otu_names = BlastN(self.options['verbose']).get_names(blast_fname, self.options['labels'], self.options['labels-similarity'], self.options['labels_db'])
 
         # rework the biom
         biom = BiomFile()

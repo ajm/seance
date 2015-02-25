@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='Seance',
-      version='0.1',
+      version='0.11',
       description='Reference-based phylogenetic analysis of 18S rRNA studies',
       author='Alan Medlar',
       author_email='alan.j.medlar@helsinki.fi',
