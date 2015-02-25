@@ -7,10 +7,10 @@ import json
 
 def wasabi(filename, name, url, user) :
     wid = _upload_to_wasabi(filename, name, url, user)
-    webbrowser.open_new_tab(_build_url(url, wid))
+    webbrowser.open_new_tab(_build_url(url, user, wid))
 
-def _build_url(url, wid) :
-    return "%s?share=%s" % (url, wid)
+def _build_url(url, uid, wid) :
+    return "%s/%s?share=%s" % (url, uid, wid)
 
 def _upload_to_wasabi(filename, name, url, user) :
     curl_command = 'curl --silent \
