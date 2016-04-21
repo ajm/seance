@@ -12,7 +12,7 @@ setup(name='Seance',
       packages=['seance'],
       install_requires=[
           'biopython >= 1.6', 
-          'dendropy >= 3.12',
+          'dendropy == 3.12',
           'cairocffi >= 0.5.4'
           ],
       scripts=['scripts/seance'],
