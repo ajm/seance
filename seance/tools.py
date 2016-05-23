@@ -422,6 +422,18 @@ class BlastN(ExternalProgram) :
         # built
 
         if db_fname is not None :
+            print "reading %s ..." % db_fname
+            acc2tax = {}
+            f = FastqFile(db_fname)
+            f.open()
+            for s in f :
+                acc,tax = s.id.strip().split(' ', 1)
+                if ";" not in tax :
+                    print "Warning: sequence with accession %s has strange taxonomical identifier (%s)" % (acc[1:], tax)
+                acc2tax[acc[1:]] = tax
+            f.close()
+            print "%d database sequences map to %d taxonomical identifiers..." % (len(acc2tax), len(set(acc2tax.values())))
+
             self.make_local_db(db_fname)
             command = self.local_command % (fasta_fname, db_fname, int(100 * perc_identity))
         else :
@@ -472,7 +484,7 @@ class BlastN(ExternalProgram) :
 
 
             if method == 'blastlocal' :
-                names[name].append(fields[1])
+                names[name].append(acc2tax.get(fields[1], "unknown"))
             else :
                 try :
                     desc = fields[1].split('|')
